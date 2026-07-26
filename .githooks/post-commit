@@ -1,0 +1,13 @@
+#!/bin/sh
+# Portable hook: derives project name + vault path from folder layout,
+# so it works on any machine where repos sit next to the w3rt vault under Desktop/Claude Code.
+REPO_ROOT=$(git rev-parse --show-toplevel)
+PROJECT=$(basename "$REPO_ROOT")
+VAULT_FILE="$(dirname "$REPO_ROOT")/w3rt/$PROJECT/Changelog.md"
+
+if [ -f "$VAULT_FILE" ]; then
+  HASH=$(git log -1 --pretty=format:"%h")
+  DATE=$(git log -1 --pretty=format:"%ad" --date=format:"%Y-%m-%d %H:%M")
+  MSG=$(git log -1 --pretty=format:"%s")
+  echo "- **${DATE}** \`${HASH}\` ${MSG}" >> "$VAULT_FILE"
+fi
