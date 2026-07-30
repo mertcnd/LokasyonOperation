@@ -845,17 +845,12 @@ async function girisYap(){
   const sp=document.getElementById('giris-sifre').value;
   if(!ku||!sp){document.getElementById('giris-hata').style.display='block';document.getElementById('giris-hata').textContent='Kullanıcı adı ve şifre giriniz.';if(btn)btn.textContent='Giriş Yap';return;}
   const hash=await sifreHashle(sp);
+  // Yalnızca girilen kullanıcı adına ait kayıt istenir. Önceden tüm kullanıcı
+  // tablosu (herkesin şifre hash'i dâhil) tarayıcıya indiriliyordu.
   let users=[];
-  try{ users=await sbGet('kullanicilar'); }catch(e){ console.error('kullanicilar fetch error:',e); }
-  if(!users||!Array.isArray(users)||users.length===0){
-    document.getElementById('giris-hata').style.display='block';
-    document.getElementById('giris-hata').textContent='Kullanıcılar yüklenemedi. Supabase bağlantısını kontrol edin (kullanicilar.sql çalıştırıldı mı?).';
-    document.getElementById('giris-hata').style.background='#fff3e0';
-    document.getElementById('giris-hata').style.color='#e65100';
-    if(btn)btn.textContent='Giriş Yap';
-    return;
-  }
-  const user=users.find(u=>u.kullanici_adi===ku&&u.sifre_hash===hash);
+  try{ users=await sbGet('kullanicilar','kullanici_adi=eq.'+encodeURIComponent(ku)); }
+  catch(e){ console.error('kullanicilar fetch error:',e); }
+  const user=(Array.isArray(users)?users:[]).find(u=>u.kullanici_adi===ku&&u.sifre_hash===hash);
   if(!user){
     document.getElementById('giris-hata').style.display='block';
     document.getElementById('giris-hata').textContent='Kullanıcı adı veya şifre hatalı.';
