@@ -656,7 +656,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
           <div id="detay-kart-durum-badge"></div>
           <button onclick="kartTamamla()" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">✔ Tamamla</button>
           <button onclick="kartArsivle()" style="background:#ff8f00;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📦 Arşivle</button>
-          <button onclick="kartSil()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">🗑 Sil</button>
+          <button id="kart-sil-btn" onclick="kartSil()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">🗑 Sil</button>
         </div>
       </div>
       <div style="margin-top:14px">
@@ -811,6 +811,20 @@ function oturumGetir(){try{const s=localStorage.getItem(SESSION_KEY);return s?JS
 function oturumKaydet(u){localStorage.setItem(SESSION_KEY,JSON.stringify(u))}
 function oturumSil(){localStorage.removeItem(SESSION_KEY)}
 
+// ─── YETKİ YARDIMCILARI ───────────────────────────────────────────────────────
+function adminMi(){ return !!aktifKullanici && aktifKullanici.rol==='admin'; }
+/*
+  Aktif kullanıcının personel adı.
+  İzin ve görev kayıtları personeli id ile değil ADIYLA tuttuğu için
+  ("izinler.personel", "todos.atanan") karşılaştırmalar ad üzerinden yapılır.
+  Kullanıcı bir personele bağlıysa onun adı, değilse hesaptaki ad kullanılır.
+*/
+function aktifPersonelAdi(){
+  if(!aktifKullanici)return '';
+  const p=personeller.find(x=>x.id===aktifKullanici.personel_id);
+  return p?p.ad:(aktifKullanici.ad_soyad||'');
+}
+
 // ─── MARKA İZİNLERİ ───────────────────────────────────────────────────────────
 // Kullanıcı kaydındaki "markalar" alanı, sekmeler alanıyla aynı biçimde saklanır
 // (JSON dizi). Alan boş/yoksa kısıt yok sayılır: kullanıcı tüm markaları görür.
@@ -922,6 +936,9 @@ function sekmeleriGuncelle(){
   // Show/hide kullanici yonetimi
   const vkSection=document.getElementById('vk-section');
   if(vkSection)vkSection.style.display=aktifKullanici.rol==='admin'?'block':'none';
+  // Ürün kartı silme yalnızca yöneticide
+  const kartSilBtn=document.getElementById('kart-sil-btn');
+  if(kartSilBtn)kartSilBtn.style.display=adminMi()?'':'none';
   // Admin olmayan: Günlük Durum'daki TÜM filtre satırı gizlenir (sadece kendi işleri, filtresiz)
   const gFiltre=document.getElementById('gunluk-filtre-satiri');
   if(gFiltre)gFiltre.style.display=aktifKullanici.rol==='admin'?'':'none';
@@ -1242,7 +1259,15 @@ function refreshAllDropdowns(){
   sel('yeni-marka',markalar,'Marka Seçin');
   sel('yeni-personel',personeller.map(p=>p.ad),'Seçin...');
   sel('yeni-isturi',isTurleri.map(i=>i.ad),'Seçin...');
-  sel('izin-per',personeller.map(p=>p.ad),'Personel Seçin...');
+  // Personel yalnızca kendi adına izin girebildiği için listede tek seçenek olur.
+  if(adminMi()){
+    sel('izin-per',personeller.map(p=>p.ad),'Personel Seçin...');
+  }else{
+    const ben=aktifPersonelAdi();
+    sel('izin-per',ben?[ben]:[],ben?'':'Personel bağlantısı yok');
+    const el=document.getElementById('izin-per');
+    if(el&&ben){el.value=ben;el.disabled=true;}
+  }
   sel('todo-atanan',['',...personeller.map(p=>p.ad)],'👤 Görevi Kime Atıyorsunuz? (Opsiyonel)');
   sel('r-fisturi',isTurleri.map(i=>i.ad),'Tüm İş Türleri');
   renderRaporPersonelBox();
@@ -1392,8 +1417,10 @@ function exportGorevCSV(){
 
 // ─── TAKVİM ──────────────────────────────────────────────────────────────────
 async function izinKaydet(){
-  const per=document.getElementById('izin-per').value;
-  if(!per){alert('Personel seçiniz.');return}
+  // Personel yalnızca kendi adına izin girebilir; seçim ne olursa olsun
+  // kayıt kendi adına yazılır (arayüzde de zaten tek seçenek gösterilir).
+  const per=adminMi()?document.getElementById('izin-per').value:aktifPersonelAdi();
+  if(!per){alert(adminMi()?'Personel seçiniz.':'Hesabınız bir personele bağlı değil. Yöneticinize başvurun.');return}
   const bas=document.getElementById('izin-bas').value,bit=document.getElementById('izin-bit').value,sure=document.getElementById('izin-sure').value;
   if(!bas||!bit){alert('Tarih giriniz.');return}
   const start=new Date(bas+'T12:00:00'),end=new Date(bit+'T12:00:00');
@@ -1408,13 +1435,22 @@ async function izinKaydet(){
 }
 function renderIzinler(){
   const ay=document.getElementById('izin-ay').value;
-  const list=izinler.filter(i=>i.tarih.startsWith(ay));
+  let list=izinler.filter(i=>i.tarih.startsWith(ay));
+  // Personel yalnızca kendi izinlerini görür.
+  if(!adminMi()){
+    const ben=aktifPersonelAdi();
+    list=list.filter(i=>i.personel===ben);
+  }
   const tbody=document.getElementById('izin-tbody');
-  if(!list.length){tbody.innerHTML=emptyRow(4,'Bu ay için kayıtlı izin bulunmamaktadır.');return}
+  if(!list.length){tbody.innerHTML=emptyRow(4,adminMi()?'Bu ay için kayıtlı izin bulunmamaktadır.':'Bu ay için kayıtlı izniniz bulunmamaktadır.');return}
+  // Silme yetkisi yalnızca yöneticide.
   tbody.innerHTML=list.map(i=>`<tr><td>${i.tarih}</td><td>${i.personel}</td><td>${i.sure}</td>
-    <td><span onclick="izinSil('${i.id}')" style="color:#e53935;cursor:pointer;font-weight:600;font-size:12px">Sil</span></td></tr>`).join('');
+    <td>${adminMi()
+      ?`<span onclick="izinSil('${i.id}')" style="color:#e53935;cursor:pointer;font-weight:600;font-size:12px">Sil</span>`
+      :'<span style="color:#bbb;font-size:12px">—</span>'}</td></tr>`).join('');
 }
 async function izinSil(id){
+  if(!adminMi()){sbToast('İzin silme yetkiniz yok.');return}
   izinler=izinler.filter(i=>i.id!==id);
   renderIzinler();
   await sbDel('izinler','id',id);
@@ -1483,13 +1519,15 @@ function simTemizle(){
 async function todoOlustur(){
   const baslik=document.getElementById('todo-baslik').value.trim();
   if(!baslik){alert('Başlık giriniz.');return}
-  const newTodo={id:uid(),atanan:document.getElementById('todo-atanan').value,baslik,aciklama:document.getElementById('todo-aciklama').value,hedefTarih:document.getElementById('todo-tarih').value,durum:'Aktif'};
+  // Görevi kimin girdiği kaydedilir; personel yalnızca kendi girdiği veya
+  // kendisine atanan görevleri görebilsin diye gerekli.
+  const newTodo={id:uid(),atanan:document.getElementById('todo-atanan').value,baslik,aciklama:document.getElementById('todo-aciklama').value,hedefTarih:document.getElementById('todo-tarih').value,durum:'Aktif',olusturan:aktifPersonelAdi()};
   todos.push(newTodo);
   document.getElementById('todo-baslik').value='';document.getElementById('todo-aciklama').value='';
   document.getElementById('todo-tarih').value='';document.getElementById('todo-atanan').value='';
   document.getElementById('todo-olustur-btn').style.background='#aaa';
   renderTodoList();
-  await sbPost('todos',{id:newTodo.id,atanan:newTodo.atanan,baslik:newTodo.baslik,aciklama:newTodo.aciklama,hedeftarih:newTodo.hedefTarih,durum:newTodo.durum});
+  await sbPost('todos',{id:newTodo.id,atanan:newTodo.atanan,baslik:newTodo.baslik,aciklama:newTodo.aciklama,hedeftarih:newTodo.hedefTarih,durum:newTodo.durum,olusturan:newTodo.olusturan});
 }
 function todoFiltre(f,btn){
   todoFiltresi=f;
@@ -1504,6 +1542,15 @@ function todoTarihToggle(){
 }
 function renderTodoList(){
   let list=todoFiltresi==='Tümü'?todos:todos.filter(t=>t.durum===todoFiltresi);
+  /*
+    Personel yalnızca kendi girdiği veya kendisine atanan görevleri görür.
+    Bu özellikten önce oluşturulmuş kayıtlarda "olusturan" boştur; onları
+    gizlemek mevcut işleri erişilemez kılacağı için görünür bırakılır.
+  */
+  if(!adminMi()){
+    const ben=aktifPersonelAdi();
+    list=list.filter(t=>!t.olusturan?true:(t.olusturan===ben||t.atanan===ben));
+  }
   const tumTarihler=document.getElementById('todo-tum-tarihler')?.checked!==false;
   if(!tumTarihler){
     const fs=document.getElementById('todo-fstart')?.value||'';
@@ -1526,6 +1573,7 @@ function renderTodoList(){
         ${t.aciklama?`<div style="font-size:11px;color:#888;margin-top:2px">${t.aciklama}</div>`:''}
         <div class="todo-meta">
           ${t.atanan?`<span style="font-size:11px;color:#1565c0">👤 ${t.atanan}</span>`:''}
+          ${t.olusturan?`<span style="font-size:11px;color:#777">✍ ${t.olusturan}</span>`:''}
           ${t.hedefTarih?`<span style="font-size:11px;color:#e65100">📅 ${t.hedefTarih}</span>`:''}
         </div>
       </div>
@@ -2758,6 +2806,7 @@ async function kartTamamla(){
   await sbPatch('urun_kartlari','id',aktifKartId,{durum:'Tamamlandı'});
 }
 async function kartSil(){
+  if(!adminMi()){sbToast('Ürün kartı silme yetkiniz yok.');return}
   if(!aktifKartId)return;
   const kid=aktifKartId; // ÖNEMLİ: id'yi baştan yakala (urunGeriDon null'a çekiyor)
   const k=urunKartlari.find(x=>x.id===kid);if(!k)return;
