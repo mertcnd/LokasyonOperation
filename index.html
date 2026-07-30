@@ -723,6 +723,10 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <div class="lbl" style="margin-bottom:8px">Görülebilecek Sekmeler</div>
         <div id="vk-sekme-checkboxlar" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
+      <div style="margin-bottom:14px">
+        <div class="lbl" style="margin-bottom:8px">Görülebilecek Markalar <span style="font-weight:400;color:#888">(hiçbiri seçilmezse tüm markalar görünür)</span></div>
+        <div id="vk-marka-checkboxlar" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
       <button class="btn btn-full" onclick="kullaniciEkle()">Kullanıcı Ekle</button>
       <div style="margin-top:20px">
         <div style="font-size:13px;font-weight:700;color:#555;margin-bottom:12px">Mevcut Kullanıcılar</div>
@@ -807,6 +811,26 @@ function oturumGetir(){try{const s=localStorage.getItem(SESSION_KEY);return s?JS
 function oturumKaydet(u){localStorage.setItem(SESSION_KEY,JSON.stringify(u))}
 function oturumSil(){localStorage.removeItem(SESSION_KEY)}
 
+// ─── MARKA İZİNLERİ ───────────────────────────────────────────────────────────
+// Kullanıcı kaydındaki "markalar" alanı, sekmeler alanıyla aynı biçimde saklanır
+// (JSON dizi). Alan boş/yoksa kısıt yok sayılır: kullanıcı tüm markaları görür.
+// Böylece bu özellik eklenmeden önce oluşturulmuş kullanıcılar kilitlenmez.
+function kullaniciMarkalari(u){
+  if(!u)return [];
+  const raw=u.markalar;
+  if(Array.isArray(raw))return raw;
+  try{ return JSON.parse(raw||'[]'); }catch(e){ return []; }
+}
+// Kısıt tanımlı mı? (boş dizi = kısıt yok = tüm markalar)
+function markaKisitliMi(u){ return u&&u.rol!=='admin'&&kullaniciMarkalari(u).length>0; }
+// Aktif kullanıcının görebileceği markalar. Admin her zaman hepsini görür.
+function gorunurMarkalar(tumMarkalar){
+  const hepsi=tumMarkalar||markalar;
+  if(!markaKisitliMi(aktifKullanici))return hepsi;
+  const izinli=kullaniciMarkalari(aktifKullanici);
+  return hepsi.filter(m=>izinli.includes(m));
+}
+
 async function sifreHashle(sifre){
   const enc=new TextEncoder();
   const data=enc.encode(sifre);
@@ -841,7 +865,7 @@ async function girisYap(){
     if(btn)btn.textContent='Giriş Yap';
     return;
   }
-  const session={id:user.id,kullanici_adi:user.kullanici_adi,ad_soyad:user.ad_soyad||user.kullanici_adi,personel_id:user.personel_id||'',rol:user.rol,sekmeler:Array.isArray(user.sekmeler)?user.sekmeler:JSON.parse(user.sekmeler||'[]')};
+  const session={id:user.id,kullanici_adi:user.kullanici_adi,ad_soyad:user.ad_soyad||user.kullanici_adi,personel_id:user.personel_id||'',rol:user.rol,sekmeler:Array.isArray(user.sekmeler)?user.sekmeler:JSON.parse(user.sekmeler||'[]'),markalar:kullaniciMarkalari(user)};
   oturumKaydet(session);
   // Sayfayi yenile — oturumKontrol session'i okuyup init()'i cagirır
   location.reload();
@@ -918,9 +942,15 @@ function renderVkSekmeCheckboxlar(seciliSekmeler){
   const cont=document.getElementById('vk-sekme-checkboxlar');if(!cont)return;
   cont.innerHTML=TUM_SEKMELER.map(s=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:#f0f2f8;padding:5px 10px;border-radius:12px;cursor:pointer"><input type="checkbox" value="${s}" ${(seciliSekmeler||[]).includes(s)?'checked':''} style="cursor:pointer"> ${SEKME_ETIKETLERI[s]}</label>`).join('');
 }
+function renderVkMarkaCheckboxlar(seciliMarkalar){
+  const cont=document.getElementById('vk-marka-checkboxlar');if(!cont)return;
+  if(!markalar.length){cont.innerHTML='<div style="color:#aaa;font-style:italic;font-size:12px">Önce Veri Yönetimi\'nden marka ekleyin.</div>';return;}
+  cont.innerHTML=markalar.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:#f0f2f8;padding:5px 10px;border-radius:12px;cursor:pointer"><input type="checkbox" value="${m}" ${(seciliMarkalar||[]).includes(m)?'checked':''} style="cursor:pointer"> ${m}</label>`).join('');
+}
 async function renderKullaniciYonetimi(){
   if(aktifKullanici?.rol!=='admin')return;
   renderVkSekmeCheckboxlar(['gunluk','takvim','gorevler','urun']);
+  renderVkMarkaCheckboxlar([]);
   const pSel=document.getElementById('vk-personel');
   if(pSel)pSel.innerHTML='<option value="">— Bağlantısız (örn. yönetici) —</option>'+personeller.map(p=>`<option value="${p.id}">${p.ad}</option>`).join('');
   const users=await sbGet('kullanicilar');
@@ -930,15 +960,20 @@ async function renderKullaniciYonetimi(){
   cont.innerHTML=users.map(u=>{
     const sek=Array.isArray(u.sekmeler)?u.sekmeler:(JSON.parse(u.sekmeler||'[]'));
     const sekLabel=sek.map(s=>SEKME_ETIKETLERI[s]||s).join(', ');
+    const mrk=kullaniciMarkalari(u);
+    const markaLabel=u.rol==='admin'
+      ?'Tüm markalar'
+      :(mrk.length?mrk.join(', '):'<span style="color:#e65100">Tüm markalar (kısıt yok)</span>');
     return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:14px;font-weight:700;color:#1a237e">${u.ad_soyad||u.kullanici_adi} <span style="font-size:11px;color:#888;font-weight:400">(@${u.kullanici_adi})</span></div>
           <div style="font-size:11px;color:#555;margin-top:3px">Rol: <strong>${u.rol==='admin'?'Yönetici':'Personel'}</strong>${(()=>{const lp=personeller.find(p=>p.id===u.personel_id);return lp?' · 🔗 '+lp.ad:(u.rol!=='admin'?' · <span style="color:#e65100">⚠ personel bağlantısı yok</span>':'');})()}</div>
           <div style="font-size:11px;color:#888;margin-top:3px">Sekmeler: ${sekLabel||'—'}</div>
+          <div style="font-size:11px;color:#888;margin-top:3px">Markalar: ${markaLabel}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="kullaniciSekmeleriDuzenle('${u.id}')" style="background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">✏ Sekmeler</button>
+          <button onclick="kullaniciSekmeleriDuzenle('${u.id}')" style="background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">✏ Sekme &amp; Marka</button>
           <button onclick="kullaniciSifreDegistir('${u.id}')" style="background:#f3e5f5;color:#7b1fa2;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">🔑 Şifre</button>
           ${u.id!=='admin-001'?`<button onclick="kullaniciSil('${u.id}','${u.kullanici_adi}')" style="background:#fce4ec;color:#c62828;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">🗑 Sil</button>`:''}
         </div>
@@ -959,8 +994,11 @@ async function kullaniciEkle(){
   const checkboxlar=document.querySelectorAll('#vk-sekme-checkboxlar input:checked');
   const sekmeler=Array.from(checkboxlar).map(cb=>cb.value);
   if(rol==='personel'&&!sekmeler.length){alert('En az bir sekme seçiniz.');return;}
+  // Marka izni: boş bırakılırsa kısıt uygulanmaz (tüm markalar görünür).
+  const markaChecks=document.querySelectorAll('#vk-marka-checkboxlar input:checked');
+  const seciliMarkalar=rol==='admin'?[]:Array.from(markaChecks).map(cb=>cb.value);
   const hash=await sifreHashle(sifre);
-  const yeni={id:uid(),kullanici_adi:kullanici,sifre_hash:hash,ad_soyad:adsoyad,personel_id:personelId||'',rol,sekmeler:rol==='admin'?TUM_SEKMELER:sekmeler};
+  const yeni={id:uid(),kullanici_adi:kullanici,sifre_hash:hash,ad_soyad:adsoyad,personel_id:personelId||'',rol,sekmeler:rol==='admin'?TUM_SEKMELER:sekmeler,markalar:JSON.stringify(seciliMarkalar)};
   await sbPost('kullanicilar',yeni);
   document.getElementById('vk-personel').value='';
   document.getElementById('vk-kullanici').value='';
@@ -976,6 +1014,7 @@ function kullaniciSekmeleriDuzenle(id){
   const u=kullanicilarListesi.find(x=>x.id===id);if(!u)return;
   const panel=document.getElementById('vk-edit-'+id);if(!panel)return;
   const sek=Array.isArray(u.sekmeler)?u.sekmeler:(JSON.parse(u.sekmeler||'[]'));
+  const mrk=kullaniciMarkalari(u);
   const isOpen=panel.style.display!=='none'&&panel.innerHTML!=='';
   if(isOpen){panel.style.display='none';panel.innerHTML='';return;}
   panel.style.display='block';
@@ -989,22 +1028,33 @@ function kullaniciSekmeleriDuzenle(id){
     <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px">
       ${TUM_SEKMELER.map(s=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:#f0f2f8;padding:5px 10px;border-radius:12px;cursor:pointer"><input type="checkbox" value="${s}" id="vke-${id}-${s}" ${sek.includes(s)?'checked':''} style="cursor:pointer"> ${SEKME_ETIKETLERI[s]}</label>`).join('')}
     </div>
+    <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:8px">Marka İzinlerini Düzenle: <span style="font-weight:400;color:#888">(hiçbiri seçilmezse tüm markalar görünür)</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px" id="vkm-box-${id}">
+      ${markalar.length
+        ?markalar.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:#fff3e0;padding:5px 10px;border-radius:12px;cursor:pointer"><input type="checkbox" value="${m}" ${mrk.includes(m)?'checked':''} style="cursor:pointer"> ${m}</label>`).join('')
+        :'<div style="color:#aaa;font-style:italic;font-size:12px">Marka tanımlı değil.</div>'}
+    </div>
     <button onclick="kullaniciSekmeleriKaydet('${id}')" style="background:#2e7d32;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">Kaydet</button>
     <button onclick="document.getElementById('vk-edit-${id}').style.display='none'" style="background:#f5f5f5;border:1.5px solid #ddd;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer;margin-left:8px">İptal</button>`;
 }
 async function kullaniciSekmeleriKaydet(id){
   const checks=document.querySelectorAll('[id^="vke-'+id+'-"]:checked');
   const sekmeler=Array.from(checks).map(cb=>cb.value).filter(v=>v.indexOf('personel-')!==0);
+  // Marka kutuları ayrı bir kapsayıcıda ve id taşımıyor; yukarıdaki
+  // [id^="vke-<id>-"] seçicisine karışmamaları için bilinçli olarak ayrıldı.
+  const markaBox=document.getElementById('vkm-box-'+id);
+  const markaSecili=markaBox?Array.from(markaBox.querySelectorAll('input:checked')).map(cb=>cb.value):[];
   const pSel=document.getElementById('vke-personel-'+id);
   const personelId=pSel?pSel.value:'';
   const lp=personeller.find(p=>p.id===personelId);
   const adSoyad=lp?lp.ad:'';
-  await sbPatch('kullanicilar','id',id,{sekmeler:JSON.stringify(sekmeler),personel_id:personelId,ad_soyad:adSoyad});
+  await sbPatch('kullanicilar','id',id,{sekmeler:JSON.stringify(sekmeler),markalar:JSON.stringify(markaSecili),personel_id:personelId,ad_soyad:adSoyad});
   const u=kullanicilarListesi.find(x=>x.id===id);
-  if(u){u.sekmeler=sekmeler;u.personel_id=personelId;u.ad_soyad=adSoyad;}
+  if(u){u.sekmeler=sekmeler;u.markalar=markaSecili;u.personel_id=personelId;u.ad_soyad=adSoyad;}
   // Aktif kullanıcı kendini düzenlediyse oturumu da güncelle
   if(aktifKullanici&&aktifKullanici.id===id){
     aktifKullanici.personel_id=personelId;aktifKullanici.ad_soyad=adSoyad;
+    aktifKullanici.markalar=markaSecili;
     oturumKaydet(aktifKullanici);
   }
   document.getElementById('vk-edit-'+id).style.display='none';
@@ -1043,6 +1093,35 @@ function doSwitchTab(name){
   if(name==='arsiv')renderArsiv();
   if(name==='urun'){urunGeriDon(false);renderUrunKartlari();const sb=document.getElementById('sablon-yonet-btn');if(sb)sb.style.display=(aktifKullanici?.rol==='admin')?'':'none';}
   if(name==='veri'){sekmeleriGuncelle();setTimeout(renderKullaniciYonetimi,50);}
+}
+
+/*
+  Marka izni kısıtını veri katmanında, tek noktada uygular.
+
+  Filtre her render fonksiyonuna tek tek eklenmek yerine burada, veriler
+  yüklendikten hemen sonra uygulanır: alttaki tüm sekmeler (günlük, raporlama,
+  arşiv, ürün kartları, maliyet…) zaten bu dizilerden beslendiği için kısıt
+  otomatik olarak her yere yansır ve ileride eklenecek ekranlar da kapsanır.
+
+  Not: Bu yalnızca GÖRÜNÜRLÜK kısıtıdır. Veriler tarayıcıya indikten sonra
+  filtrelendiği için gerçek erişim denetimi değildir; asıl koruma Supabase
+  tarafındaki RLS politikalarında olmalıdır.
+*/
+function markaFiltresiUygula(){
+  if(!markaKisitliMi(aktifKullanici))return;
+  const izinli=kullaniciMarkalari(aktifKullanici);
+  const izinliMi=m=>izinli.includes(m);
+
+  markalar=markalar.filter(izinliMi);
+  gorevler=gorevler.filter(g=>!g.marka||izinliMi(g.marka));
+  urunKartlari=urunKartlari.filter(k=>!k.marka||izinliMi(k.marka));
+
+  // Ürün adımları markayı doğrudan taşımaz; bağlı oldukları karta göre süzülür.
+  const gorunurKartIds=new Set(urunKartlari.map(k=>k.id));
+  urunAdimlar=urunAdimlar.filter(a=>!a.kart_id||gorunurKartIds.has(a.kart_id));
+
+  // Markaya özel fiyat tablosundan da izinsiz markalar çıkarılır.
+  Object.keys(mFiyatlarMarka).forEach(m=>{ if(!izinliMi(m))delete mFiyatlarMarka[m]; });
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -1116,6 +1195,8 @@ async function init(){
   urunAdimlar=ua.map(a=>({...a,tarih:a.tarih||'',gercek_sure:a.gercek_sure||0,zorluk:a.zorluk||'Normal',arsivlendi:a.arsivlendi||false}));
   adimTimerlerRestore();
   await kartKodlariBackfill();
+
+  markaFiltresiUygula();
 
   const t=today();
   document.getElementById('g-fstart').value=t;
