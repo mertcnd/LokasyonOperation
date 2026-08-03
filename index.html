@@ -260,7 +260,10 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div class="card-title">Simülasyon İş Paketi</div>
       <div style="margin-bottom:14px">
         <div class="lbl">Kayıtlı Simülasyon Yükle</div>
-        <select id="sim-kayitli" onchange="simYukle()"><option value="">Yeni Simülasyon Başlat...</option></select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="sim-kayitli" onchange="simYukle()" style="flex:1"><option value="">Yeni Simülasyon Başlat...</option></select>
+          <button id="sim-sil-btn" onclick="simSil()" title="Seçili kayıtlı simülasyonu sil" style="display:none;background:#e53935;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">🗑 Sil</button>
+        </div>
       </div>
       <div style="font-size:13px;font-weight:600;color:#444;margin-bottom:10px">İş Paketi Listesi (İnteraktif)</div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 30px;gap:8px;margin-bottom:6px">
@@ -300,6 +303,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   <div class="todo-banner">
     <h2>🐾 Kişisel Görevlerim & Ekip Takibi (To-Do)</h2>
     <p>Günlük bireysel iş takibinizi, son tarihleri ve detayları buradan yönetebilirsiniz.</p>
+    <p id="todo-gizlilik-notu" style="margin-top:6px;font-size:12px;opacity:.85">🔒 Notlarınız kişiseldir: yalnızca sizin yazdığınız ve size atanan notlar listelenir.</p>
   </div>
   <div class="card">
     <div style="margin-bottom:14px"><select id="todo-atanan"><option value="">👤 Görevi Kime Atıyorsunuz? (Opsiyonel)</option></select></div>
@@ -971,6 +975,14 @@ function sekmeleriGuncelle(){
   // Ürün kartı adını değiştirme de yalnızca yöneticide
   const kartAdBtn=document.getElementById('kart-ad-duzenle-btn');
   if(kartAdBtn)kartAdBtn.style.display=adminMi()?'':'none';
+  // Kayıtlı simülasyon silme yalnızca yöneticide
+  const simSilBtn=document.getElementById('sim-sil-btn');
+  if(simSilBtn)simSilBtn.style.display=adminMi()?'':'none';
+  // To Do gizlilik notu role göre değişir
+  const todoNot=document.getElementById('todo-gizlilik-notu');
+  if(todoNot)todoNot.textContent=adminMi()
+    ?'🔓 Yönetici olarak tüm kullanıcıların notlarını görüyorsunuz.'
+    :'🔒 Notlarınız kişiseldir: yalnızca sizin yazdığınız ve size atanan notlar listelenir.';
   // Günlük Durum filtreleri herkeste görünür. Admin olmayan kullanıcı yalnızca
   // kendi işlerini gördüğü için Personel seçimi kendi adına kilitlenir.
   const gFiltre=document.getElementById('gunluk-filtre-satiri');
@@ -1553,7 +1565,11 @@ function simHesapla(){
 }
 async function simKaydet(){
   if(!simPaketler.length){alert('Kaydedilecek iş paketi yok.');return}
-  const ad=`Simülasyon ${simKayitlar.length+1}`,hedef=document.getElementById('sim-hedef').value;
+  // Silme sonrası isim çakışmasın diye kullanılmayan ilk numara seçilir
+  // (kayıtlar "ad" üzerinden yüklendiği için aynı isim iki kayda verilemez).
+  let n=simKayitlar.length+1;
+  while(simKayitlar.some(s=>s.ad===`Simülasyon ${n}`))n++;
+  const ad=`Simülasyon ${n}`,hedef=document.getElementById('sim-hedef').value;
   const newSim={id:uid(),ad,paketler:JSON.parse(JSON.stringify(simPaketler)),hedef};
   simKayitlar.push(newSim);
   renderSimKayitliSel();
@@ -1563,6 +1579,19 @@ async function simKaydet(){
 function simYukle(){
   const ad=document.getElementById('sim-kayitli').value,s=simKayitlar.find(x=>x.ad===ad);
   if(s){simPaketler=JSON.parse(JSON.stringify(s.paketler));document.getElementById('sim-hedef').value=s.hedef;simRenderPaketler()}
+}
+// Kayıtlı simülasyonu silme: yalnızca yönetici.
+async function simSil(){
+  if(!adminMi()){sbToast('Kayıtlı simülasyonu yalnızca yönetici silebilir.');return}
+  const ad=document.getElementById('sim-kayitli').value;
+  if(!ad){alert('Önce silmek istediğiniz kayıtlı simülasyonu listeden seçin.');return}
+  const s=simKayitlar.find(x=>x.ad===ad);if(!s)return;
+  if(!confirm(`"${ad}" kayıtlı simülasyonu silinecek. Bu işlem geri alınamaz. Emin misiniz?`))return;
+  simKayitlar=simKayitlar.filter(x=>x.id!==s.id);
+  document.getElementById('sim-kayitli').value='';
+  renderSimKayitliSel();
+  await sbDel('sim_kayitlar','id',s.id);
+  sbToast('✔ Simülasyon silindi: '+ad);
 }
 function simTemizle(){
   simPaketler=[];simRenderPaketler();
@@ -1575,9 +1604,11 @@ function simTemizle(){
 async function todoOlustur(){
   const baslik=document.getElementById('todo-baslik').value.trim();
   if(!baslik){alert('Başlık giriniz.');return}
-  // Görevi kimin girdiği kaydedilir; personel yalnızca kendi girdiği veya
-  // kendisine atanan görevleri görebilsin diye gerekli.
-  const newTodo={id:uid(),atanan:document.getElementById('todo-atanan').value,baslik,aciklama:document.getElementById('todo-aciklama').value,hedefTarih:document.getElementById('todo-tarih').value,durum:'Aktif',olusturan:aktifPersonelAdi()};
+  // Görevi kimin girdiği kaydedilir; herkes yalnızca kendi girdiği veya
+  // kendisine atanan notları görebilsin diye zorunlu alandır.
+  const sahip=todoSahipAdi();
+  if(!sahip){alert('Hesabınız bir kullanıcıya bağlı görünmüyor; not oluşturulamadı. Yöneticinize başvurun.');return}
+  const newTodo={id:uid(),atanan:document.getElementById('todo-atanan').value,baslik,aciklama:document.getElementById('todo-aciklama').value,hedefTarih:document.getElementById('todo-tarih').value,durum:'Aktif',olusturan:sahip};
   todos.push(newTodo);
   document.getElementById('todo-baslik').value='';document.getElementById('todo-aciklama').value='';
   document.getElementById('todo-tarih').value='';document.getElementById('todo-atanan').value='';
@@ -1599,11 +1630,24 @@ function todoTarihToggle(){
 // Sekmedeki rozet: kullanıcının GÖREBİLDİĞİ tamamlanmamış To Do sayısı.
 // (Eskiden yanlışlıkla "Bekliyor" durumundaki ürün kartı adımları sayılıyordu;
 //  bu yüzden listede 2-3 not varken rozette 15-20 görünüyordu.)
+// To Do kaydında "olusturan"/"atanan" alanlarına yazılan ad. Personele bağlı
+// olmayan hesaplarda (örn. yönetici) ad_soyad, o da yoksa kullanıcı adı kullanılır;
+// böylece kayıt asla sahipsiz kalmaz.
+function todoSahipAdi(){
+  return aktifPersonelAdi()||(aktifKullanici?(aktifKullanici.ad_soyad||aktifKullanici.kullanici_adi||''):'');
+}
+// To Do artık kişiseldir: herkes yalnızca kendi yazdığı ve kendisine atanan
+// notları görür. Yönetici tümünü görür.
 function gorunurTodolar(){
   if(adminMi())return todos;
-  const ben=aktifPersonelAdi();
-  // "olusturan" alanı boş olan eski kayıtlar herkese görünür kalır.
-  return todos.filter(t=>!t.olusturan?true:(t.olusturan===ben||t.atanan===ben));
+  const ben=todoSahipAdi();
+  if(!ben)return [];
+  return todos.filter(t=>t.olusturan===ben||t.atanan===ben);
+}
+// Notu yalnızca yazan kişi (veya yönetici) silebilir; atanan kişi yalnızca
+// tamamlandı olarak işaretleyebilir.
+function todoSilebilirMi(t){
+  return adminMi()||(!!t.olusturan&&t.olusturan===todoSahipAdi());
 }
 function todoBadgeGuncelle(){
   const badge=document.getElementById('todo-badge');if(!badge)return;
@@ -1642,7 +1686,7 @@ function renderTodoList(){
           ${t.hedefTarih?`<span style="font-size:11px;color:#e65100">📅 ${t.hedefTarih}</span>`:''}
         </div>
       </div>
-      <button class="todo-del" onclick="todoSil('${t.id}')">×</button>
+      ${todoSilebilirMi(t)?`<button class="todo-del" onclick="todoSil('${t.id}')">×</button>`:''}
     </div>`).join('');
 }
 async function todoToggle(id){
@@ -1652,7 +1696,9 @@ async function todoToggle(id){
   await sbPatch('todos','id',id,{durum:t.durum});
 }
 async function todoSil(id){
-  todos=todos.filter(t=>t.id!==id);
+  const t=todos.find(x=>x.id===id);if(!t)return;
+  if(!todoSilebilirMi(t)){sbToast('Bu notu yalnızca yazan kişi silebilir.');return}
+  todos=todos.filter(x=>x.id!==id);
   renderTodoList();
   await sbDel('todos','id',id);
 }
