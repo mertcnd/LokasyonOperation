@@ -576,8 +576,11 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <input type="text" id="vm-ad" placeholder="Marka Adı" style="flex:1">
         <button class="btn" onclick="markaEkle()" style="white-space:nowrap">Marka Ekle</button>
       </div>
+      <div id="vm-renk-uyari" style="display:none;font-size:11.5px;color:#bf360c;background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.5">
+        Renkler şu an marka adına göre otomatik atanıyor. Renkleri elle seçebilmek için <b>sql/marka-renkleri.sql</b> dosyasını Supabase &gt; SQL Editor'de bir kez çalıştırın.
+      </div>
       <table class="tbl">
-        <thead><tr><th>Marka Adı</th><th>İşlem</th></tr></thead>
+        <thead><tr><th>Marka Adı</th><th>Renk</th><th>İşlem</th></tr></thead>
         <tbody id="vm-tbody"></tbody>
       </table>
     </div>
@@ -654,6 +657,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <div id="detay-kart-durum-badge"></div>
+          <button id="kart-ad-duzenle-btn" onclick="kartAdiDuzenle()" style="background:#1565c0;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">✏️ Adı Düzenle</button>
           <button onclick="kartTamamla()" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">✔ Tamamla</button>
           <button onclick="kartArsivle()" style="background:#ff8f00;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📦 Arşivle</button>
           <button id="kart-sil-btn" onclick="kartSil()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">🗑 Sil</button>
@@ -781,6 +785,8 @@ const sbUps  = async(t,d,k)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?on
 let gorevler=[],izinler=[],simPaketler=[],simKayitlar=[],todos=[];
 let todoFiltresi='Tümü';
 let personeller=[],isTurleri=[],markalar=[];
+let markaRenkleri={};        // {markaAdi:'#rrggbb'} — DB'deki markalar.renk sütunundan
+let markaRenkDestegi=true;   // markalar tablosunda "renk" sütunu var mı? (sql/marka-renkleri.sql)
 let mFiyatlar={};
 let mFiyatlarMarka={}; // {marka:{isTuruAd:{basit,normal,kompleks}}}
 let sablonlar=[];
@@ -794,6 +800,29 @@ function thisMonth(){return today().slice(0,7)}
 function fmtSaat(dk){return (dk/60).toFixed(1)}
 function fmtTL(v){return (v||0).toLocaleString('tr-TR',{minimumFractionDigits:2})+' TL'}
 function emptyRow(cols,txt){return `<tr><td colspan="${cols}" class="empty-row">${txt}</td></tr>`}
+// ─── MARKA RENKLERİ ──────────────────────────────────────────────────────────
+// Renk önce DB'den (markalar.renk) okunur; yoksa marka adından üretilen sabit
+// palet rengi kullanılır — böylece sütun eklenmeden de her marka ayrışır.
+const MARKA_PALET=['#1565c0','#2e7d32','#ef6c00','#6a1b9a','#c62828','#00838f','#ad1457','#4e342e','#558b2f','#283593','#0277bd','#f9a825'];
+function markaRengi(m){
+  if(!m)return '#90a4ae';
+  if(markaRenkleri[m])return markaRenkleri[m];
+  let h=0;for(let i=0;i<m.length;i++)h=(h*31+m.charCodeAt(i))>>>0;
+  return MARKA_PALET[h%MARKA_PALET.length];
+}
+function renkRGB(hex){
+  const h=(hex||'').replace('#','');
+  if(h.length!==6)return[144,164,174];
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+function renkSoft(hex,a=.13){const[r,g,b]=renkRGB(hex);return `rgba(${r},${g},${b},${a})`}
+function markaChip(m,fs=11){
+  const c=markaRengi(m);
+  return `<span title="Marka: ${m||'—'}" style="display:inline-block;font-size:${fs}px;font-weight:700;color:${c};background:${renkSoft(c)};border:1px solid ${renkSoft(c,.35)};padding:2px 9px;border-radius:12px;white-space:nowrap">${m||'—'}</span>`;
+}
+function markaNokta(m){
+  return `<span title="Marka: ${m||'—'}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${markaRengi(m)};flex-shrink:0"></span>`;
+}
 function durumBadge(d){const m={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','İptal Edildi':'badge-ipt'};return `<span class="badge ${m[d]||''}">${d}</span>`}
 function sel(id,opts,placeholder){const el=document.getElementById(id);if(!el)return;const cur=el.value;el.innerHTML=(placeholder?`<option value="">${placeholder}</option>`:'')+opts.map(o=>`<option value="${o}">${o}</option>`).join('');if(cur)el.value=cur}
 function exportCSV(rows,filename){const csv=rows.map(r=>r.map(c=>`"${(c??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));a.download=filename;a.click()}
@@ -939,9 +968,13 @@ function sekmeleriGuncelle(){
   // Ürün kartı silme yalnızca yöneticide
   const kartSilBtn=document.getElementById('kart-sil-btn');
   if(kartSilBtn)kartSilBtn.style.display=adminMi()?'':'none';
-  // Admin olmayan: Günlük Durum'daki TÜM filtre satırı gizlenir (sadece kendi işleri, filtresiz)
+  // Ürün kartı adını değiştirme de yalnızca yöneticide
+  const kartAdBtn=document.getElementById('kart-ad-duzenle-btn');
+  if(kartAdBtn)kartAdBtn.style.display=adminMi()?'':'none';
+  // Günlük Durum filtreleri herkeste görünür. Admin olmayan kullanıcı yalnızca
+  // kendi işlerini gördüğü için Personel seçimi kendi adına kilitlenir.
   const gFiltre=document.getElementById('gunluk-filtre-satiri');
-  if(gFiltre)gFiltre.style.display=aktifKullanici.rol==='admin'?'':'none';
+  if(gFiltre)gFiltre.style.display='';
   // Alt başlığı da role göre uyarla
   const gSub=document.querySelector('#tab-gunluk .sec-sub');
   if(gSub)gSub.textContent=aktifKullanici.rol==='admin'
@@ -1148,6 +1181,11 @@ async function init(){
   personeller=p.map(x=>({...x,email:x.email||''}));
   isTurleri=it;
   markalar=m.map(x=>x.ad);
+  // Marka renkleri: "renk" sütunu yoksa (sql/marka-renkleri.sql çalıştırılmadıysa)
+  // otomatik palet devreye girer, elle seçim kapalı kalır.
+  markaRenkDestegi=m.length?('renk' in m[0]):true;
+  markaRenkleri={};
+  m.forEach(x=>{if(x.renk)markaRenkleri[x.ad]=x.renk});
   gorevler=g.map(x=>({...x,isTuru:x.isturi,arsivlendi:x.arsivlendi||false,gercek_sure:x.gercek_sure||0,revizyon_sayisi:x.revizyon_sayisi||0}));
   izinler=iz;
   todos=td.map(x=>({...x,hedefTarih:x.hedeftarih||''}));
@@ -1211,8 +1249,10 @@ async function init(){
   markaFiltresiUygula();
 
   const t=today();
-  document.getElementById('g-fstart').value=t;
-  document.getElementById('g-fend').value=t;
+  // Admin'de günlük görünüm bugüne sabitlenir; personelde tarih filtresi boş
+  // başlar ki kendisine atanmış tüm aktif işler (geçmiş/gelecek/tarihsiz) görünsün.
+  document.getElementById('g-fstart').value=adminMi()?t:'';
+  document.getElementById('g-fend').value=adminMi()?t:'';
   document.getElementById('izin-bas').value=t;
   document.getElementById('izin-bit').value=t;
   document.getElementById('izin-ay').value=thisMonth();
@@ -1254,7 +1294,17 @@ async function init(){
 }
 
 function refreshAllDropdowns(){
-  sel('g-fpersonel',personeller.map(p=>p.ad),'Tüm Personel');
+  // Personel hesabı yalnızca kendi işlerini görebildiği için seçim kendi adına kilitlenir.
+  if(adminMi()){
+    sel('g-fpersonel',personeller.map(p=>p.ad),'Tüm Personel');
+    const gp=document.getElementById('g-fpersonel');if(gp)gp.disabled=false;
+  }else{
+    const b=benimPersonelAdim();
+    const ben=personeller.some(p=>p.ad===b)?b:null;
+    sel('g-fpersonel',ben?[ben]:[],ben?'':'Personel bağlantısı yok');
+    const gp=document.getElementById('g-fpersonel');
+    if(gp){if(ben)gp.value=ben;gp.disabled=true;}
+  }
   sel('g-fmarka',markalar,'Tüm Markalar');
   sel('yeni-marka',markalar,'Marka Seçin');
   sel('yeni-personel',personeller.map(p=>p.ad),'Seçin...');
@@ -1313,49 +1363,55 @@ function benimPersonelAdim(){
   return p2?p2.ad:(aktifKullanici.ad_soyad||'__eslesme_yok__');
 }
 function filteredAdimlar(){
-  const benim=benimPersonelAdim();
-  if(benim){
-    // PERSONEL MODU: filtreler devre dışı — kişiye atanmış TÜM aktif işler
-    // (tarihi geçmiş, bugünkü, gelecekteki ve tarihi atanmamış olanlar dahil)
-    return urunAdimlar
-      .filter(a=>!a.arsivlendi&&a.atanan===benim)
-      .sort((a,b)=>{
-        if(!a.tarih&&!b.tarih)return (a.sira||0)-(b.sira||0);
-        if(!a.tarih)return 1;   // tarihsizler en sona
-        if(!b.tarih)return -1;
-        return a.tarih<b.tarih?-1:(a.tarih>b.tarih?1:0);
-      });
-  }
-  // ADMIN MODU: filtreler aktif
+  const benim=benimPersonelAdim();   // admin'de null
   const fs=document.getElementById('g-fstart').value,fe=document.getElementById('g-fend').value;
   const fp=document.getElementById('g-fpersonel').value;
   const fm=document.getElementById('g-fmarka').value,fd=document.getElementById('g-fdurum').value;
-  return urunAdimlar.filter(a=>{
+  const list=urunAdimlar.filter(a=>{
     if(a.arsivlendi)return false;
-    if(!a.tarih)return false;
-    if(fs&&a.tarih<fs)return false;
-    if(fe&&a.tarih>fe)return false;
-    if(fp&&a.atanan!==fp)return false;
+    // PERSONEL MODU: yalnızca kendisine atanmış işler; tarihi olmayanlar da görünür
+    // (tarih filtresi boşken geçmiş/gelecek/tarihsiz tüm aktif işler listelenir).
+    if(benim){
+      if(a.atanan!==benim)return false;
+    }else{
+      if(!a.tarih)return false;      // admin görünümünde tarihsiz adımlar gizli
+      if(fp&&a.atanan!==fp)return false;
+    }
+    if(fs&&(!a.tarih||a.tarih<fs))return false;
+    if(fe&&(!a.tarih||a.tarih>fe))return false;
     if(fm){const k=urunKartlari.find(x=>x.id===a.kart_id);if(!k||k.marka!==fm)return false;}
     if(fd&&a.durum!==fd)return false;
     return true;
   });
+  if(benim){
+    list.sort((a,b)=>{
+      if(!a.tarih&&!b.tarih)return (a.sira||0)-(b.sira||0);
+      if(!a.tarih)return 1;   // tarihsizler en sona
+      if(!b.tarih)return -1;
+      return a.tarih<b.tarih?-1:(a.tarih>b.tarih?1:0);
+    });
+  }
+  return list;
 }
 function renderGorevler(){
   const list=filteredAdimlar();
-  const allBek=urunAdimlar.filter(a=>a.durum==='Bekliyor').length;
-  const badge=document.getElementById('todo-badge');
-  badge.textContent=allBek;badge.style.display=allBek>0?'inline':'none';
   checkDeadlines();
   const tbody=document.getElementById('gorev-tbody');
   if(!list.length){tbody.innerHTML=emptyRow(8,'Seçili tarih aralığında ürün kartı adımı bulunamadı. Ürün Kartları sekmesinden adımlara tarih atayın.');return}
   tbody.innerHTML=list.map(a=>{
     const kart=urunKartlari.find(x=>x.id===a.kart_id);
     const kartAdi=kart?kart.ad:'-';
+    const marka=kart?kart.marka:'';
+    const mRenk=markaRengi(marka);
     const bdg={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam'}[a.durum]||'badge-bek';
     return `<tr style="cursor:pointer" onclick="switchTab('urun');setTimeout(()=>kartDetayAc('${a.kart_id}'),50)">
-      <td>${a.tarih}</td>
-      <td><span style="font-size:11px;color:#1565c0;font-weight:600">${kartAdi}</span></td>
+      <td style="border-left:4px solid ${mRenk}">${a.tarih||'—'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${markaNokta(marka)}<span style="font-size:11px;color:${mRenk};font-weight:700">${kartAdi}</span>
+        </div>
+        ${marka?`<div style="font-size:10px;color:#999;margin-top:2px;padding-left:14px">${marka}</div>`:''}
+      </td>
       <td><strong>${a.ad}</strong></td>
       <td>${a.is_turu||'-'}</td>
       <td>${a.atanan||'-'}</td>
@@ -1540,17 +1596,26 @@ function todoTarihToggle(){
   document.getElementById('todo-tarih-araligi').style.display=tum?'none':'flex';
   renderTodoList();
 }
+// Sekmedeki rozet: kullanıcının GÖREBİLDİĞİ tamamlanmamış To Do sayısı.
+// (Eskiden yanlışlıkla "Bekliyor" durumundaki ürün kartı adımları sayılıyordu;
+//  bu yüzden listede 2-3 not varken rozette 15-20 görünüyordu.)
+function gorunurTodolar(){
+  if(adminMi())return todos;
+  const ben=aktifPersonelAdi();
+  // "olusturan" alanı boş olan eski kayıtlar herkese görünür kalır.
+  return todos.filter(t=>!t.olusturan?true:(t.olusturan===ben||t.atanan===ben));
+}
+function todoBadgeGuncelle(){
+  const badge=document.getElementById('todo-badge');if(!badge)return;
+  const n=gorunurTodolar().filter(t=>t.durum!=='Tamamlanan').length;
+  badge.textContent=n;
+  badge.style.display=n>0?'inline':'none';
+}
 function renderTodoList(){
-  let list=todoFiltresi==='Tümü'?todos:todos.filter(t=>t.durum===todoFiltresi);
-  /*
-    Personel yalnızca kendi girdiği veya kendisine atanan görevleri görür.
-    Bu özellikten önce oluşturulmuş kayıtlarda "olusturan" boştur; onları
-    gizlemek mevcut işleri erişilemez kılacağı için görünür bırakılır.
-  */
-  if(!adminMi()){
-    const ben=aktifPersonelAdi();
-    list=list.filter(t=>!t.olusturan?true:(t.olusturan===ben||t.atanan===ben));
-  }
+  todoBadgeGuncelle();
+  // Personel yalnızca kendi girdiği veya kendisine atanan görevleri görür (bkz. gorunurTodolar).
+  const gorunur=gorunurTodolar();
+  let list=todoFiltresi==='Tümü'?gorunur:gorunur.filter(t=>t.durum===todoFiltresi);
   const tumTarihler=document.getElementById('todo-tum-tarihler')?.checked!==false;
   if(!tumTarihler){
     const fs=document.getElementById('todo-fstart')?.value||'';
@@ -1956,10 +2021,44 @@ async function isTuruSil(id){
 }
 function renderVeriMarkalar(){
   const tbody=document.getElementById('vm-tbody');if(!tbody)return;
+  const uyari=document.getElementById('vm-renk-uyari');
+  if(uyari)uyari.style.display=(!markaRenkDestegi&&adminMi())?'block':'none';
+  const renkSecilebilir=markaRenkDestegi&&adminMi();
   tbody.innerHTML=markalar.length
-    ?markalar.map(m=>`<tr><td style="padding:9px 12px;font-size:12px;font-weight:500">${m}</td>
-      <td style="padding:9px 12px"><span onclick="markaSil('${m.replace(/'/g,"\\'")}')" style="color:#e53935;cursor:pointer;font-weight:600;font-size:12px">Sil</span></td></tr>`).join('')
-    :'<tr><td colspan="2" class="empty-row">Henüz marka eklenmedi.</td></tr>';
+    ?markalar.map(m=>{
+      const esc=m.replace(/'/g,"\\'");
+      const c=markaRengi(m);
+      const ozel=!!markaRenkleri[m];
+      return `<tr><td style="padding:9px 12px;font-size:12px;font-weight:500">${markaChip(m,12)}</td>
+      <td style="padding:9px 12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="color" value="${c}" ${renkSecilebilir?`onchange="markaRenkKaydet('${esc}',this.value)"`:'disabled'} title="${renkSecilebilir?'Marka rengini seçin':'Renk otomatik atandı'}" style="width:38px;height:26px;padding:0;border:1px solid #d0d7e3;border-radius:6px;background:#fff;cursor:${renkSecilebilir?'pointer':'not-allowed'}">
+          <span style="font-family:monospace;font-size:11px;color:#888">${c}</span>
+          ${ozel&&renkSecilebilir?`<span onclick="markaRenkSifirla('${esc}')" title="Otomatik renge dön" style="color:#1565c0;cursor:pointer;font-size:11px;font-weight:600">sıfırla</span>`:''}
+        </div>
+      </td>
+      <td style="padding:9px 12px"><span onclick="markaSil('${esc}')" style="color:#e53935;cursor:pointer;font-weight:600;font-size:12px">Sil</span></td></tr>`;
+    }).join('')
+    :'<tr><td colspan="3" class="empty-row">Henüz marka eklenmedi.</td></tr>';
+}
+// Marka rengi değişince renk gösteren tüm ekranlar tazelenir.
+function markaRenkleriYenile(){
+  renderVeriMarkalar();
+  renderGorevler();
+  if(typeof renderUrunKartlari==='function')renderUrunKartlari();
+  if(aktifKartId&&typeof kartDetayAc==='function')kartDetayAc(aktifKartId);
+}
+async function markaRenkKaydet(ad,renk){
+  if(!adminMi()){sbToast('Marka rengini yalnızca yönetici değiştirebilir.');return}
+  markaRenkleri[ad]=renk;
+  markaRenkleriYenile();
+  await sbPatch('markalar','ad',ad,{renk});
+}
+async function markaRenkSifirla(ad){
+  if(!adminMi()){sbToast('Marka rengini yalnızca yönetici değiştirebilir.');return}
+  delete markaRenkleri[ad];
+  markaRenkleriYenile();
+  await sbPatch('markalar','ad',ad,{renk:null});
 }
 async function markaEkle(){
   const ad=document.getElementById('vm-ad').value.trim();
@@ -2588,9 +2687,10 @@ function renderUrunKartlari(){
     const pct=top>0?Math.round((tam/top)*100):0;
     const durumBdg={Aktif:'badge-dev',Tamamlandı:'badge-tam',Arşivlendi:'badge-ipt'}[k.durum]||'badge-bek';
     const aktifAdim=adimlar.filter(a=>a.durum==='Devam Ediyor')[0]||adimlar.filter(a=>a.durum==='Bekliyor')[0];
-    return `<div onclick="kartDetayAc('${k.id}')" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:18px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px" onmouseover="this.style.boxShadow='0 4px 20px rgba(21,101,192,.1)'" onmouseout="this.style.boxShadow='none'">
+    const mRenk=markaRengi(k.marka);
+    return `<div onclick="kartDetayAc('${k.id}')" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;border-left:5px solid ${mRenk};padding:18px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px" onmouseover="this.style.boxShadow='0 4px 20px ${renkSoft(mRenk,.28)}'" onmouseout="this.style.boxShadow='none'">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div style="font-size:11px;font-weight:700;color:#1565c0;background:#e3f2fd;padding:3px 10px;border-radius:12px">${k.marka||'—'}</div>
+        <div>${markaChip(k.marka)}</div>
         <span class="badge ${durumBdg}" style="font-size:10px">${k.durum}</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -2618,7 +2718,7 @@ function kartDetayAc(id){
   document.getElementById('urun-detay-view').style.display='block';
   document.getElementById('detay-kart-adi').innerHTML=`<span onclick="kartKoduKopyala('${k.id}',event)" title="Klasör adını kopyalamak için tıklayın" style="font-size:13px;font-weight:800;color:#fff;background:#1a237e;padding:3px 10px;border-radius:6px;letter-spacing:.5px;font-family:monospace;cursor:pointer;margin-right:10px;vertical-align:middle">${k.kod||'—'}</span>${k.ad}`;
   document.getElementById('detay-kart-adi-lbl').textContent=(k.kod?k.kod+' · ':'')+k.ad;
-  document.getElementById('detay-kart-meta').textContent=`Marka: ${k.marka||'—'}  ·  Açan: ${k.olusturan||'—'}  ·  ${k.tarih||''}`;
+  document.getElementById('detay-kart-meta').innerHTML=`${markaChip(k.marka)} <span style="color:#888">·  Açan: ${k.olusturan||'—'}  ·  ${k.tarih||''}</span>`;
   const klasorAdi=klasorAdiUret(k);
   const klasorEl=document.getElementById('detay-klasor-adi');
   if(klasorEl){
@@ -2804,6 +2904,25 @@ async function kartTamamla(){
   k.durum='Tamamlandı';
   kartDetayAc(aktifKartId);
   await sbPatch('urun_kartlari','id',aktifKartId,{durum:'Tamamlandı'});
+}
+async function kartAdiDuzenle(){
+  if(!adminMi()){sbToast('Ürün kartı adını yalnızca yönetici değiştirebilir.');return}
+  if(!aktifKartId)return;
+  const k=urunKartlari.find(x=>x.id===aktifKartId);if(!k)return;
+  const yeni=(prompt('Ürün kartının yeni adı:',k.ad)||'').trim();
+  if(!yeni||yeni===k.ad)return;
+  const eski=k.ad;
+  k.ad=yeni;
+  kartDetayAc(aktifKartId);   // başlık, klasör adı ve etiketler tazelenir
+  renderGorevler();
+  const ok=await sbPatch('urun_kartlari','id',k.id,{ad:yeni});
+  if(ok===false){       // kayıt başarısızsa eski ada geri dön
+    k.ad=eski;
+    kartDetayAc(aktifKartId);
+    renderGorevler();
+    return;
+  }
+  sbToast('✔ Kart adı güncellendi: '+yeni);
 }
 async function kartSil(){
   if(!adminMi()){sbToast('Ürün kartı silme yetkiniz yok.');return}
