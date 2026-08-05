@@ -65,6 +65,7 @@ input:focus,select:focus,textarea:focus{border-color:#1565c0;box-shadow:0 0 0 2p
 .badge-dev{background:#e3f2fd;color:#1565c0}
 .badge-tam{background:#e8f5e9;color:#2e7d32}
 .badge-ipt{background:#fce4ec;color:#880e4f}
+.badge-ret{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
 /* FILTERS ROW */
 .filter-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
 .filter-group{display:flex;flex-direction:column;flex:1;min-width:130px}
@@ -198,7 +199,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
     <div class="filter-group"><div class="lbl">Durum</div>
       <select id="g-fdurum">
         <option value="">Tüm Durumlar</option>
-        <option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>İptal Edildi</option>
+        <option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option><option>İptal Edildi</option>
       </select>
     </div>
   </div>
@@ -422,7 +423,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div><div class="lbl">Marka (Çoklu)</div><div class="multi-box" id="r-marka-box"></div></div>
       <div><div class="lbl">İş Türü</div><select id="r-fisturi"><option value="">Tüm İş Türleri</option></select></div>
       <div><div class="lbl">Zorluk</div><select id="r-fzorluk"><option value="">Tüm Zorluklar</option><option>Basit</option><option>Normal</option><option>Kompleks</option></select></div>
-      <div><div class="lbl">Durum</div><select id="r-fdurum"><option value="">Tüm Durumlar</option><option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>İptal Edildi</option></select></div>
+      <div><div class="lbl">Durum</div><select id="r-fdurum"><option value="">Tüm Durumlar</option><option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option><option>İptal Edildi</option></select></div>
     </div>
   </div>
 
@@ -827,7 +828,7 @@ function markaChip(m,fs=11){
 function markaNokta(m){
   return `<span title="Marka: ${m||'—'}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${markaRengi(m)};flex-shrink:0"></span>`;
 }
-function durumBadge(d){const m={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','İptal Edildi':'badge-ipt'};return `<span class="badge ${m[d]||''}">${d}</span>`}
+function durumBadge(d){const m={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret','İptal Edildi':'badge-ipt'};return `<span class="badge ${m[d]||''}">${d}</span>`}
 function sel(id,opts,placeholder){const el=document.getElementById(id);if(!el)return;const cur=el.value;el.innerHTML=(placeholder?`<option value="">${placeholder}</option>`:'')+opts.map(o=>`<option value="${o}">${o}</option>`).join('');if(cur)el.value=cur}
 function exportCSV(rows,filename){const csv=rows.map(r=>r.map(c=>`"${(c??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));a.download=filename;a.click()}
 function showLoading(msg='Veriler yükleniyor...'){const ov=document.getElementById('loading-overlay');if(ov){ov.querySelector('span').textContent=msg;ov.style.display='flex'}}
@@ -1415,7 +1416,7 @@ function renderGorevler(){
     const kartAdi=kart?kart.ad:'-';
     const marka=kart?kart.marka:'';
     const mRenk=markaRengi(marka);
-    const bdg={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam'}[a.durum]||'badge-bek';
+    const bdg={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret'}[a.durum]||'badge-bek';
     return `<tr style="cursor:pointer" onclick="switchTab('urun');setTimeout(()=>kartDetayAc('${a.kart_id}'),50)">
       <td style="border-left:4px solid ${mRenk}">${a.tarih||'—'}</td>
       <td>
@@ -1424,14 +1425,14 @@ function renderGorevler(){
         </div>
         ${marka?`<div style="font-size:10px;color:#999;margin-top:2px;padding-left:14px">${marka}</div>`:''}
       </td>
-      <td><strong>${a.ad}</strong></td>
+      <td><strong style="color:${a.durum==='RET'?'#c62828':'inherit'}">${a.durum==='RET'?'<span class="badge badge-ret" style="margin-right:6px;font-size:10px">RET</span>':''}${a.ad}</strong></td>
       <td>${a.is_turu||'-'}</td>
       <td>${a.atanan||'-'}</td>
       <td>${a.sure||0}</td>
       <td><span class="badge ${bdg}">${a.durum}</span></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <select onchange="adimDurumDegistirGunluk('${a.id}',this.value)" style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:11px">
-          ${['Bekliyor','Devam Ediyor','Tamamlandı'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
+        <select onchange="adimDurumDegistirGunluk('${a.id}',this.value)" style="border:1px solid ${a.durum==='RET'?'#e53935':'#ddd'};border-radius:4px;padding:3px 6px;font-size:11px;color:${a.durum==='RET'?'#c62828':'inherit'};font-weight:${a.durum==='RET'?'700':'400'}">
+          ${['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
         </select>
         <button onclick="event.stopPropagation();arsivGonder('${a.id}')" title="Arşive Gönder" style="background:#ff8f00;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px">📦</button>
       </td>
@@ -1780,9 +1781,9 @@ function renderRaporlama(){
     {l:'NET Boşluk',v:fmtSaat(netBos)+' saat',c:'#e65100',bg:'#fff8e1'},
     {l:'NET Fazla',v:fmtSaat(netFazla)+' saat',c:'#c62828',bg:'#fce4ec'},
   ].map(({l,v,c,bg})=>`<div class="sum-kpi" style="background:${bg}"><div class="sk-lbl">${l}</div><div class="sk-val" style="color:${c}">${v}</div></div>`).join('');
-  const durColors={'Bekliyor':'#e65100','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','İptal Edildi':'#880e4f'};
+  const durColors={'Bekliyor':'#e65100','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935','İptal Edildi':'#880e4f'};
   document.getElementById('r-durum-bars').innerHTML=
-    ['Bekliyor','Devam Ediyor','Tamamlandı','İptal Edildi'].map(d=>{
+    ['Bekliyor','Devam Ediyor','Tamamlandı','RET','İptal Edildi'].map(d=>{
       const cnt=list.filter(g=>g.durum===d).length,pct=total>0?(cnt/total)*100:0;
       return `<div class="bar-row"><div class="bar-label">${d}</div><div class="bar-track"><div class="bar-fill" style="background:${durColors[d]};width:${pct}%"></div></div><div class="bar-val" style="color:${durColors[d]}">${cnt}</div></div>`;
     }).join('')||'<div style="text-align:center;padding:40px;color:#ddd">Veri yok</div>';
@@ -2296,7 +2297,7 @@ function kapHesaplaRapor(fs,fe){
 }
 
 // ─── TAKVİM ───────────────────────────────────────────────────────────────────
-const durumRenk={'Bekliyor':'#e65100','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','İptal Edildi':'#880e4f'};
+const durumRenk={'Bekliyor':'#e65100','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935','İptal Edildi':'#880e4f'};
 
 
 
@@ -2732,7 +2733,9 @@ function renderUrunKartlari(){
     const top=adimlar.length;
     const pct=top>0?Math.round((tam/top)*100):0;
     const durumBdg={Aktif:'badge-dev',Tamamlandı:'badge-tam',Arşivlendi:'badge-ipt'}[k.durum]||'badge-bek';
-    const aktifAdim=adimlar.filter(a=>a.durum==='Devam Ediyor')[0]||adimlar.filter(a=>a.durum==='Bekliyor')[0];
+    // RET olan adım varsa kart kapağında o gösterilir — müdahale isteyen ilk şey odur.
+    const retAdim=adimlar.filter(a=>a.durum==='RET')[0];
+    const aktifAdim=retAdim||adimlar.filter(a=>a.durum==='Devam Ediyor')[0]||adimlar.filter(a=>a.durum==='Bekliyor')[0];
     const mRenk=markaRengi(k.marka);
     return `<div onclick="kartDetayAc('${k.id}')" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;border-left:5px solid ${mRenk};padding:18px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px" onmouseover="this.style.boxShadow='0 4px 20px ${renkSoft(mRenk,.28)}'" onmouseout="this.style.boxShadow='none'">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -2750,7 +2753,7 @@ function renderUrunKartlari(){
       </div>
       <div style="font-size:11px;color:#aaa;display:flex;justify-content:space-between">
         <span>👤 ${k.olusturan||'—'}</span>
-        ${aktifAdim?`<span style="color:#1565c0">▶ ${aktifAdim.ad}</span>`:''}
+        ${aktifAdim?`<span style="color:${retAdim?'#c62828':'#1565c0'};font-weight:${retAdim?'700':'400'}">${retAdim?'⛔ RET: ':'▶ '}${aktifAdim.ad}</span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2808,11 +2811,12 @@ function renderDetayAdimlar(){
     cont.innerHTML='<div class="card" style="text-align:center;color:#aaa;padding:30px;font-style:italic">Henüz adım eklenmedi. Aşağıdan adım ekleyin.</div>';
     return;
   }
-  const durumRenk={'Bekliyor':'#9e9e9e','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32'};
-  const bdgMap={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam'};
+  const durumRenk={'Bekliyor':'#9e9e9e','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935'};
+  const bdgMap={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret'};
   cont.innerHTML=adimlar.map(a=>{
     const col=durumRenk[a.durum]||'#9e9e9e';
     const bdg=bdgMap[a.durum]||'badge-bek';
+    const ret=a.durum==='RET';   // RET: adım baştan aşağı kırmızı vurgulanır
     const ts=adimTimerStates[a.id];
     const timerSec=ts?(ts.acc+(ts.startTs?Math.floor((Date.now()-ts.startTs)/1000):0)):0;
     const timerTxt=timerSec>0?`${Math.floor(timerSec/60)}dk ${String(timerSec%60).padStart(2,'0')}sn`:'0dk 00sn';
@@ -2820,19 +2824,19 @@ function renderDetayAdimlar(){
     const fiiliColor=(a.gercek_sure||0)>(a.sure||0)?'#e53935':'#2e7d32';
     const isExpanded=expandedAdimId===a.id;
     const notlar=urunAdimNotlari[a.id]||[];
-    return `<div style="border:1.5px solid ${isExpanded?'#1565c0':'#e2e8f0'};border-radius:10px;margin-bottom:10px;background:#fff;overflow:hidden;transition:border-color .15s">
+    return `<div style="border:1.5px solid ${ret?'#e53935':(isExpanded?'#1565c0':'#e2e8f0')};border-radius:10px;margin-bottom:10px;background:${ret?'#fff5f5':'#fff'};overflow:hidden;transition:border-color .15s">
       <div style="display:grid;grid-template-columns:34px 1fr auto 130px 26px 22px;gap:10px;align-items:center;padding:13px 16px;cursor:pointer" onclick="adimExpand('${a.id}')">
-        <div style="width:30px;height:30px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">${a.durum==='Tamamlandı'?'✓':a.sira}</div>
+        <div style="width:30px;height:30px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:${ret?'11px':'12px'};font-weight:800;flex-shrink:0">${a.durum==='Tamamlandı'?'✓':(ret?'RET':a.sira)}</div>
         <div style="overflow:hidden;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:${a.durum==='Tamamlandı'?'#aaa':'#222'};${a.durum==='Tamamlandı'?'text-decoration:line-through':''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.ad}${a.arsivlendi?' <span style="font-size:9px;font-weight:700;color:#ff8f00;background:#fff3e0;padding:2px 6px;border-radius:8px;margin-left:4px">📦 ARŞİVDE</span>':''}</div>
+          <div style="font-size:13px;font-weight:700;color:${ret?'#c62828':(a.durum==='Tamamlandı'?'#aaa':'#222')};${a.durum==='Tamamlandı'?'text-decoration:line-through':''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ret?'<span class="badge badge-ret" style="margin-right:6px;font-size:10px">RET</span>':''}${a.ad}${a.arsivlendi?' <span style="font-size:9px;font-weight:700;color:#ff8f00;background:#fff3e0;padding:2px 6px;border-radius:8px;margin-left:4px">📦 ARŞİVDE</span>':''}</div>
           <div style="font-size:11px;color:#888;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.is_turu||'—'} · ${a.atanan||'Atanmamış'}${a.tarih?' · 📅 '+a.tarih:''}${isRunning?' &nbsp;⏱':''}</div>
         </div>
         <div style="text-align:right;font-size:11px;color:#888;white-space:nowrap">
           <div>İdeal: <strong>${a.sure||0} dk</strong></div>
           <div style="margin-top:3px">Fiili: <strong style="color:${fiiliColor}">${a.gercek_sure||0} dk</strong></div>
         </div>
-        <select onclick="event.stopPropagation()" onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid #ddd;border-radius:6px;padding:5px 8px;font-size:11px;background:#fff;width:100%">
-          ${['Bekliyor','Devam Ediyor','Tamamlandı'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
+        <select onclick="event.stopPropagation()" onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid ${ret?'#e53935':'#ddd'};border-radius:6px;padding:5px 8px;font-size:11px;background:#fff;width:100%;color:${ret?'#c62828':'inherit'};font-weight:${ret?'700':'400'}">
+          ${['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
         </select>
         <div style="display:flex;flex-direction:column;gap:1px" onclick="event.stopPropagation()">
           <button onclick="adimTasi('${a.id}',-1)" title="Yukarı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▲</button>
