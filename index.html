@@ -199,7 +199,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
     <div class="filter-group"><div class="lbl">Durum</div>
       <select id="g-fdurum">
         <option value="">Tüm Durumlar</option>
-        <option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option><option>İptal Edildi</option>
+        <option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option>
       </select>
     </div>
   </div>
@@ -423,7 +423,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div><div class="lbl">Marka (Çoklu)</div><div class="multi-box" id="r-marka-box"></div></div>
       <div><div class="lbl">İş Türü</div><select id="r-fisturi"><option value="">Tüm İş Türleri</option></select></div>
       <div><div class="lbl">Zorluk</div><select id="r-fzorluk"><option value="">Tüm Zorluklar</option><option>Basit</option><option>Normal</option><option>Kompleks</option></select></div>
-      <div><div class="lbl">Durum</div><select id="r-fdurum"><option value="">Tüm Durumlar</option><option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option><option>İptal Edildi</option></select></div>
+      <div><div class="lbl">Durum</div><select id="r-fdurum"><option value="">Tüm Durumlar</option><option>Bekliyor</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>RET</option></select></div>
     </div>
   </div>
 
@@ -1783,7 +1783,7 @@ function renderRaporlama(){
   ].map(({l,v,c,bg})=>`<div class="sum-kpi" style="background:${bg}"><div class="sk-lbl">${l}</div><div class="sk-val" style="color:${c}">${v}</div></div>`).join('');
   const durColors={'Bekliyor':'#e65100','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935','İptal Edildi':'#880e4f'};
   document.getElementById('r-durum-bars').innerHTML=
-    ['Bekliyor','Devam Ediyor','Tamamlandı','RET','İptal Edildi'].map(d=>{
+    ['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>{
       const cnt=list.filter(g=>g.durum===d).length,pct=total>0?(cnt/total)*100:0;
       return `<div class="bar-row"><div class="bar-label">${d}</div><div class="bar-track"><div class="bar-fill" style="background:${durColors[d]};width:${pct}%"></div></div><div class="bar-val" style="color:${durColors[d]}">${cnt}</div></div>`;
     }).join('')||'<div style="text-align:center;padding:40px;color:#ddd">Veri yok</div>';
