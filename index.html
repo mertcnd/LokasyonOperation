@@ -1373,6 +1373,31 @@ async function init(){
   document.getElementById('todo-baslik').addEventListener('input',function(){
     document.getElementById('todo-olustur-btn').style.background=this.value.trim()?'#2e7d32':'#aaa';
   });
+  // Karşılaştırma büyütme ekranı: sürükleme, tekerlek ve kısayollar
+  const kbs=document.getElementById('kb-sahne');
+  if(kbs){
+    kbs.addEventListener('mousedown',kbKaydirBasla);
+    kbs.addEventListener('wheel',e=>{
+      if(!kbAcikMi())return;
+      e.preventDefault();
+      const r=kbs.getBoundingClientRect();
+      kbZoomMerkezli(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);
+    },{passive:false});
+  }
+  document.addEventListener('mousemove',kbKaydir);
+  document.addEventListener('mouseup',kbKaydirBitir);
+  window.addEventListener('resize',()=>{ if(kbAcikMi())kbSigdir(); });
+  document.addEventListener('keydown',e=>{
+    if(!kbAcikMi())return;
+    if(e.key==='Escape'){kbKapat();return}
+    if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||''))return;
+    if(e.key==='1')kbSec('a');
+    else if(e.key==='2')kbSec('b');
+    else if(e.key==='3')kbSec('diff');
+    else if(e.key==='+'||e.key==='=')kbZoom(1.25);
+    else if(e.key==='-')kbZoom(1/1.25);
+    else if(e.key==='0')kbSigdir();
+  });
   // Doküman not ekranı: çizim ve klavye kısayolları
   const dov=document.getElementById('dnot-overlay');
   if(dov)dov.addEventListener('mousedown',dnotMouseDown);
@@ -3807,6 +3832,91 @@ async function dokumanNotSayilariYukle(kartId){
   if(aktifKartId===kartId)renderKartDokumanlari(kartId);
 }
 
+// --- KARSILASTIRMA SONUCU BUYUTME (yakinlastir / kaydir / A-B-Fark gecisi) ---
+// Uc gorsel ayni yakinlastirma ve konumu paylasir; boylece A ile B arasinda
+// gidip gelerek ayni noktadaki degisiklik gozle yakalanabilir.
+const KB_SEKME=[{k:'a',ad:'A · Orijinal'},{k:'b',ad:'B · Revize'},{k:'diff',ad:'Farklar'}];
+const kb={hangi:'a',z:1,x:0,y:0,surukle:null,veri:{}};
+function karsBuyut(hangi){
+  const kaynak=document.getElementById('kars-canvas-'+hangi);
+  if(!kaynak||!kaynak.width)return;
+  kb.hangi=hangi;
+  document.getElementById('kars-buyut').style.display='flex';
+  kbSekmeleriCiz();
+  kbGorseliYukle(true);
+}
+function kbKapat(){document.getElementById('kars-buyut').style.display='none'}
+function kbAcikMi(){return document.getElementById('kars-buyut').style.display==='flex'}
+function kbSekmeleriCiz(){
+  document.getElementById('kb-sekmeler').innerHTML=KB_SEKME.map((s,i)=>
+    `<button class="dnot-arac${kb.hangi===s.k?' aktif':''}" onclick="kbSec('${s.k}')">${i+1} · ${s.ad}</button>`).join('');
+}
+function kbSec(hangi){
+  if(kb.hangi===hangi)return;
+  kb.hangi=hangi;
+  kbSekmeleriCiz();
+  kbGorseliYukle(false);   // yakınlaştırma ve konum korunur
+}
+function kbGorseliYukle(sigdir){
+  const kaynak=document.getElementById('kars-canvas-'+kb.hangi);
+  const img=document.getElementById('kb-img');
+  if(!kb.veri[kb.hangi]){
+    try{ kb.veri[kb.hangi]=kaynak.toDataURL('image/png'); }
+    catch(e){ console.error('Görsel alınamadı:',e); sbToast('Görsel büyütülemedi.'); return; }
+  }
+  img.onload=()=>{ if(sigdir)kbSigdir(); else kbUygula(); };
+  img.src=kb.veri[kb.hangi];
+  if(img.complete&&img.naturalWidth){ sigdir?kbSigdir():kbUygula(); }
+}
+function kbUygula(){
+  const img=document.getElementById('kb-img');
+  img.style.transform=`translate(${kb.x}px,${kb.y}px) scale(${kb.z})`;
+  // %100'ün üstünde pikselleri yumuşatma: baskı kontrolünde net kenar gerekir
+  img.style.imageRendering=kb.z>1.2?'pixelated':'auto';
+  document.getElementById('kb-zoom-lbl').textContent='%'+Math.round(kb.z*100);
+}
+function kbSigdir(){
+  const s=document.getElementById('kb-sahne'),img=document.getElementById('kb-img');
+  if(!img.naturalWidth)return;
+  kb.z=Math.min((s.clientWidth-40)/img.naturalWidth,(s.clientHeight-40)/img.naturalHeight);
+  kb.x=(s.clientWidth-img.naturalWidth*kb.z)/2;
+  kb.y=(s.clientHeight-img.naturalHeight*kb.z)/2;
+  kbUygula();
+}
+function kbGercekBoyut(){
+  const s=document.getElementById('kb-sahne'),img=document.getElementById('kb-img');
+  // Ekran merkezindeki nokta sabit kalacak şekilde %100'e geç
+  kbZoomMerkezli(1/kb.z,s.clientWidth/2,s.clientHeight/2);
+}
+function kbZoom(kat){
+  const s=document.getElementById('kb-sahne');
+  kbZoomMerkezli(kat,s.clientWidth/2,s.clientHeight/2);
+}
+function kbZoomMerkezli(kat,cx,cy){
+  const yeni=Math.min(8,Math.max(.05,kb.z*kat));
+  if(yeni===kb.z)return;
+  kb.x=cx-(cx-kb.x)*(yeni/kb.z);
+  kb.y=cy-(cy-kb.y)*(yeni/kb.z);
+  kb.z=yeni;
+  kbUygula();
+}
+function kbKaydirBasla(ev){
+  if(!kbAcikMi())return;
+  kb.surukle={x:ev.clientX-kb.x,y:ev.clientY-kb.y};
+  document.getElementById('kb-sahne').style.cursor='grabbing';
+  ev.preventDefault();
+}
+function kbKaydir(ev){
+  if(!kb.surukle)return;
+  kb.x=ev.clientX-kb.surukle.x;kb.y=ev.clientY-kb.surukle.y;
+  kbUygula();
+}
+function kbKaydirBitir(){
+  if(!kb.surukle)return;
+  kb.surukle=null;
+  document.getElementById('kb-sahne').style.cursor='grab';
+}
+
 // --- DOSYA KARSILASTIRMA (piksel diff, tamamen tarayicida) ---
 function karsilastirmaAc(){
   document.getElementById('kars-dosya-a').value='';
@@ -3852,6 +3962,7 @@ async function karsilastir(){
   const btn=document.getElementById('kars-btn');
   btn.disabled=true;btn.textContent='Isleniyor...';
   document.getElementById('kars-sonuc').style.display='none';
+  kb.veri={};   // yeni karşılaştırma: büyütme önbelleği sıfırlanır
   try{
     karsDurum('Dosya A okunuyor...');
     const cA=await dosyayiCanvasaCevir(fa,sayfa);
@@ -4216,6 +4327,26 @@ if(document.readyState==='loading'){
 
 
 <!-- DOSYA KARŞILAŞTIRMA MODAL -->
+<!-- ══ KARŞILAŞTIRMA BÜYÜTME EKRANI ═══════════════════════════════════════ -->
+<div id="kars-buyut" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#141a2b;z-index:9999;flex-direction:column">
+  <div style="background:#1a237e;color:#fff;padding:9px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0">
+    <div style="font-weight:700;font-size:13px">🔍 Karşılaştırma</div>
+    <div id="kb-sekmeler" style="display:flex;gap:5px"></div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button onclick="kbZoom(1/1.25)" class="dnot-tbtn">−</button>
+      <span id="kb-zoom-lbl" style="font-size:12px;min-width:52px;text-align:center">%100</span>
+      <button onclick="kbZoom(1.25)" class="dnot-tbtn">+</button>
+      <button onclick="kbSigdir()" class="dnot-tbtn" title="Ekrana sığdır">⤢ Sığdır</button>
+      <button onclick="kbGercekBoyut()" class="dnot-tbtn" title="Gerçek piksel boyutu">1:1</button>
+    </div>
+    <div style="font-size:11px;opacity:.75">Sürükleyerek gezin · tekerlekle yakınlaştır · 1/2/3 ile geçiş · Esc kapatır</div>
+    <button onclick="kbKapat()" class="dnot-tbtn" style="margin-left:auto;font-weight:700">× Kapat</button>
+  </div>
+  <div id="kb-sahne" style="flex:1;position:relative;overflow:hidden;cursor:grab;background:#0f1420">
+    <img id="kb-img" alt="" style="position:absolute;top:0;left:0;transform-origin:0 0;user-select:none;-webkit-user-drag:none;background:#fff">
+  </div>
+</div>
+
 <!-- ══ DOKÜMAN NOT/İŞARETLEME EKRANI ══════════════════════════════════════ -->
 <div id="dokuman-not-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#141a2b;z-index:9998;flex-direction:column">
   <div style="background:#1a237e;color:#fff;padding:9px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0">
@@ -4283,18 +4414,19 @@ if(document.readyState==='loading'){
       <div id="kars-durum" style="display:none;font-size:13px;color:#1565c0;padding:10px 14px;background:#e3f2fd;border-radius:8px;margin-bottom:14px"></div>
       <div id="kars-sonuc" style="display:none">
         <div id="kars-ozet" style="font-size:14px;font-weight:700;padding:12px 16px;border-radius:8px;margin-bottom:16px"></div>
+        <div style="font-size:11px;color:#888;margin-bottom:10px">💡 Görsellerden birine tıklayın: tam ekran açılır, yakınlaştırıp sürükleyebilir ve aynı noktada A / B / Farklar arasında geçiş yapabilirsiniz.</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
           <div>
             <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">Dosya A (Orijinal)</div>
-            <canvas id="kars-canvas-a" style="width:100%;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+            <canvas id="kars-canvas-a" onclick="karsBuyut('a')" title="Büyütmek için tıklayın" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;cursor:zoom-in"></canvas>
           </div>
           <div>
             <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">Dosya B (Revize)</div>
-            <canvas id="kars-canvas-b" style="width:100%;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+            <canvas id="kars-canvas-b" onclick="karsBuyut('b')" title="Büyütmek için tıklayın" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;cursor:zoom-in"></canvas>
           </div>
           <div>
             <div style="font-size:12px;font-weight:700;color:#c62828;margin-bottom:6px">Farklar (kırmızı)</div>
-            <canvas id="kars-canvas-diff" style="width:100%;border:2px solid #c62828;border-radius:8px"></canvas>
+            <canvas id="kars-canvas-diff" onclick="karsBuyut('diff')" title="Büyütmek için tıklayın" style="width:100%;border:2px solid #c62828;border-radius:8px;cursor:zoom-in"></canvas>
           </div>
         </div>
       </div>
