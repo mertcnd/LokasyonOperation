@@ -1282,7 +1282,9 @@ async function init(){
   const t=today();
   // Tüm tarih aralığı filtreleri içinde bulunulan ayla başlar; kullanıcı
   // dilediğinde değiştirir.
-  tarihAraligiAyaAyarla('g-fstart','g-fend');        // Günlük Durum
+  // Günlük Durum bunun dışındadır: tarih seçilmediği sürece her şey görünür.
+  document.getElementById('g-fstart').value='';
+  document.getElementById('g-fend').value='';
   tarihAraligiAyaAyarla('r-fstart','r-fend');        // Raporlama
   tarihAraligiAyaAyarla('m-fstart','m-fend');        // Maliyet
   tarihAraligiAyaAyarla('a-fstart','a-fend');        // Arşiv
@@ -1414,28 +1416,27 @@ function filteredAdimlar(){
   const fm=document.getElementById('g-fmarka').value,fd=document.getElementById('g-fdurum').value;
   const list=urunAdimlar.filter(a=>{
     if(a.arsivlendi)return false;
-    // PERSONEL MODU: yalnızca kendisine atanmış işler; tarihi olmayanlar da görünür
-    // (tarih filtresi boşken geçmiş/gelecek/tarihsiz tüm aktif işler listelenir).
+    // Personel yalnızca kendisine atanmış işleri görür; admin herkesinkini.
     if(benim){
       if(a.atanan!==benim)return false;
     }else{
-      if(!a.tarih)return false;      // admin görünümünde tarihsiz adımlar gizli
       if(fp&&a.atanan!==fp)return false;
     }
+    // Tarih seçilmediği sürece her şey görünür (tarihsiz adımlar dâhil);
+    // tarih seçilirse yalnızca o aralıktaki adımlar listelenir.
     if(fs&&(!a.tarih||a.tarih<fs))return false;
     if(fe&&(!a.tarih||a.tarih>fe))return false;
     if(fm){const k=urunKartlari.find(x=>x.id===a.kart_id);if(!k||k.marka!==fm)return false;}
     if(fd&&a.durum!==fd)return false;
     return true;
   });
-  if(benim){
-    list.sort((a,b)=>{
-      if(!a.tarih&&!b.tarih)return (a.sira||0)-(b.sira||0);
-      if(!a.tarih)return 1;   // tarihsizler en sona
-      if(!b.tarih)return -1;
-      return a.tarih<b.tarih?-1:(a.tarih>b.tarih?1:0);
-    });
-  }
+  // Tarihe göre sıralanır, tarihsiz adımlar en sona düşer.
+  list.sort((a,b)=>{
+    if(!a.tarih&&!b.tarih)return (a.sira||0)-(b.sira||0);
+    if(!a.tarih)return 1;
+    if(!b.tarih)return -1;
+    return a.tarih<b.tarih?-1:(a.tarih>b.tarih?1:0);
+  });
   return list;
 }
 function renderGorevler(){
