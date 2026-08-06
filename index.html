@@ -287,7 +287,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div id="sim-empty" style="font-size:12px;color:#aaa;font-style:italic;margin-bottom:12px">Başlamak için 'Yeni İş Paketi Ekle' butonuna tıklayın veya kayıtlı bir simülasyon yükleyin.</div>
       <button class="btn btn-full" style="margin-bottom:16px" onclick="simYeniSatir()">+ Yeni İş Paketi Ekle</button>
       <div style="margin-bottom:14px">
-        <div class="lbl">Hedeflenen Tamamlanma Süresi (Gün)</div>
+        <div class="lbl">Hedeflenen Tamamlanma Süresi (iş günü)</div>
         <input type="number" id="sim-hedef" value="10" min="1">
       </div>
       <button class="btn btn-green btn-full" style="margin-bottom:10px" onclick="simHesapla()">Personel İhtiyacını Hesapla</button>
@@ -460,7 +460,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   </div>
   <div class="card" style="margin-bottom:18px">
     <div style="font-size:13px;font-weight:700;color:#444;margin-bottom:4px">🗓 Personel Yük Haritası</div>
-    <div style="font-size:11px;color:#888;margin-bottom:12px">Renk: 🟢 Boş → 🟠 Dolu → 🔴 Aşırı yük &nbsp;|&nbsp; 🟣 İzinli</div>
+    <div style="font-size:11px;color:#888;margin-bottom:12px">Renk: 🟢 Boş → 🟠 Dolu → 🔴 Aşırı yük &nbsp;|&nbsp; 🟣 İzinli &nbsp;|&nbsp; ⬜ Hafta sonu &nbsp;|&nbsp; 🟪 Resmî tatil &nbsp;|&nbsp; 🟧 Arife (yarım gün). Mesai dışı günler kapasiteye sayılmaz; gün başlığına gelince tatilin adı görünür.</div>
     <div id="r-heatmap"><div style="text-align:center;color:#aaa;padding:20px;font-style:italic">Raporlama filtreleri uygulandıktan sonra heatmap oluşturulur.</div></div>
   </div>
   <div class="card">
@@ -815,6 +815,64 @@ function thisMonth(){return today().slice(0,7)}
 function ayBasi(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'}
 function aySonu(){const d=new Date(),s=new Date(d.getFullYear(),d.getMonth()+1,0);
   return s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0')}
+// ─── RESMİ TATİLLER (Türkiye) ────────────────────────────────────────────────
+// Sabit tarihli bayramlar kuralla, dini bayramlar hicri takvimden (Umm al-Qura)
+// hesaplanır; tablo tutulmadığı için her yıl kendiliğinden doğru çalışır.
+// 2026 ve 2027 için üretilen tarihler Diyanet'in yayımladığı tarihlerle
+// birebir doğrulandı. Arifeler (13:00 sonrası) yarım gün sayılır.
+const GUNLUK_MESAI_DK=8*60;
+const TATIL_SABIT=[
+  [1,1,'Yılbaşı'],
+  [4,23,'Ulusal Egemenlik ve Çocuk Bayramı'],
+  [5,1,'Emek ve Dayanışma Günü'],
+  [5,19,'Atatürk\'ü Anma, Gençlik ve Spor Bayramı'],
+  [7,15,'Demokrasi ve Millî Birlik Günü'],
+  [8,30,'Zafer Bayramı'],
+  [10,29,'Cumhuriyet Bayramı']
+];
+const tatilOnbellek={};
+function p2(n){return String(n).padStart(2,'0')}
+function gunKaydir(g,fark){const d=new Date(g+'T12:00:00');d.setDate(d.getDate()+fark);return dateToStr(d)}
+function tatilTakvimi(yil){
+  if(tatilOnbellek[yil])return tatilOnbellek[yil];
+  const t={};
+  // Tam gün, yarım günü ezer (arife bir resmî tatile denk gelirse tam gün kalır)
+  const ekle=(g,ad,yarim)=>{
+    if(!g||g.slice(0,4)!==String(yil))return;
+    const v=t[g];
+    if(!v||(v.yarim&&!yarim))t[g]={ad,yarim:!!yarim};
+  };
+  TATIL_SABIT.forEach(([ay,gun,ad])=>ekle(`${yil}-${p2(ay)}-${p2(gun)}`,ad,false));
+  ekle(`${yil}-10-28`,'Cumhuriyet Bayramı arifesi',true);
+  try{
+    const fmt=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn',
+      {timeZone:'UTC',year:'numeric',month:'numeric',day:'numeric'});
+    // Arifesi bu yıla düşen, kendisi gelecek yıla taşan bayramlar için 5 gün taşma
+    const bitis=new Date(Date.UTC(yil+1,0,5));
+    for(let d=new Date(Date.UTC(yil,0,1));d<=bitis;d.setUTCDate(d.getUTCDate()+1)){
+      const p={};fmt.formatToParts(d).forEach(x=>p[x.type]=x.value);
+      const hAy=parseInt(p.month),hGun=parseInt(p.day);
+      const g=d.toISOString().slice(0,10);
+      if(hAy===10&&hGun>=1&&hGun<=3)ekle(g,`Ramazan Bayramı ${hGun}. gün`,false);
+      if(hAy===12&&hGun>=10&&hGun<=13)ekle(g,`Kurban Bayramı ${hGun-9}. gün`,false);
+      if(hAy===10&&hGun===1)ekle(gunKaydir(g,-1),'Ramazan Bayramı arifesi',true);
+      if(hAy===12&&hGun===10)ekle(gunKaydir(g,-1),'Kurban Bayramı arifesi',true);
+    }
+  }catch(e){ console.warn('Dini bayram hesaplanamadı:',e); }
+  tatilOnbellek[yil]=t;
+  return t;
+}
+// Bir günün çalışma durumu: calisma = 1 tam, 0.5 yarım (arife), 0 tatil/hafta sonu
+function gunBilgisi(g){
+  const d=new Date(g+'T12:00:00');
+  const haftaSonu=d.getDay()===0||d.getDay()===6;
+  const t=tatilTakvimi(d.getFullYear())[g];
+  if(haftaSonu)return {calisma:0,haftaSonu:true,tatil:!!t,ad:t?t.ad+' · hafta sonu':'Hafta sonu'};
+  if(t&&!t.yarim)return {calisma:0,tatil:true,ad:t.ad};
+  if(t&&t.yarim)return {calisma:.5,yarim:true,tatil:true,ad:t.ad+' (yarım gün)'};
+  return {calisma:1,ad:''};
+}
+function gunlukMesaiDk(g){return Math.round(GUNLUK_MESAI_DK*gunBilgisi(g).calisma)}
 function tarihAraligiAyaAyarla(basId,bitId){
   const b=document.getElementById(basId),s=document.getElementById(bitId);
   if(b)b.value=ayBasi();
@@ -2308,25 +2366,25 @@ function dateRangeArr(s,e){
   return dates;
 }
 function izinDkCevir(sure){const n=parseInt(sure)||8;return n*60;}
-function kapHesapla(fs,fe,fp){
-  // fp = single personel filter or '' for all
-  const perList=fp?[fp]:personeller.map(p=>p.ad);
+// Kapasite: hafta sonları ve resmî tatiller mesai dışıdır, arifeler yarım gündür.
+// İzin, o günün mesaisinden fazla düşemez (tatile denk gelen izin kapasiteyi
+// eksiye çekmesin).
+function kapasiteHesapla(perList,fs,fe){
   const dates=(fs&&fe)?dateRangeArr(fs,fe):[today()];
-  const baseKap=perList.length*8*60*dates.length;
+  const gunlukToplam=dates.reduce((s,g)=>s+gunlukMesaiDk(g),0);
+  const baseKap=perList.length*gunlukToplam;
   const izinDk=izinler
     .filter(i=>perList.includes(i.personel)&&(!fs||i.tarih>=fs)&&(!fe||i.tarih<=fe))
-    .reduce((s,i)=>s+izinDkCevir(i.sure),0);
+    .reduce((s,i)=>s+Math.min(izinDkCevir(i.sure),gunlukMesaiDk(i.tarih)),0);
   return Math.max(0,baseKap-izinDk);
+}
+function kapHesapla(fs,fe,fp){
+  // fp = single personel filter or '' for all
+  return kapasiteHesapla(fp?[fp]:personeller.map(p=>p.ad),fs,fe);
 }
 function kapHesaplaRapor(fs,fe){
   // For raporlama: uses rPersonelSec multi-select
-  const perList=rPersonelSec.length?rPersonelSec:personeller.map(p=>p.ad);
-  const dates=(fs&&fe)?dateRangeArr(fs,fe):[today()];
-  const baseKap=perList.length*8*60*dates.length;
-  const izinDk=izinler
-    .filter(i=>perList.includes(i.personel)&&(!fs||i.tarih>=fs)&&(!fe||i.tarih<=fe))
-    .reduce((s,i)=>s+izinDkCevir(i.sure),0);
-  return Math.max(0,baseKap-izinDk);
+  return kapasiteHesapla(rPersonelSec.length?rPersonelSec:personeller.map(p=>p.ad),fs,fe);
 }
 
 // ─── TAKVİM ───────────────────────────────────────────────────────────────────
@@ -2370,13 +2428,15 @@ function renderHeatmap(list){
   const dates=dateRangeArr(fs,fe);
   const diff=dates.length;
   if(diff>62){el.innerHTML='<div style="text-align:center;color:#aaa;padding:16px;font-size:12px">Heatmap için maksimum 62 günlük aralık seçin.</div>';return}
-  const kapDk=8*60;
   let html='<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:10px">';
   html+='<tr><th style="padding:4px 10px;text-align:left;font-size:11px;color:#555;white-space:nowrap;position:sticky;left:0;background:#fff">Personel</th>';
   dates.forEach(d=>{
     const dt=new Date(d+'T12:00:00');
-    const wk=dt.getDay()===0||dt.getDay()===6;
-    html+=`<th style="padding:2px 1px;text-align:center;color:${wk?'#e53935':'#888'};min-width:26px;font-size:9px">${dt.getDate()}<br><span style="color:#bbb">${['P','Pt','S','Ç','Pe','C','Ct'][dt.getDay()]}</span></th>`;
+    const bilgi=gunBilgisi(d);
+    // Resmî tatil mor, hafta sonu kırmızı, arife turuncu
+    const renk=bilgi.tatil&&!bilgi.haftaSonu?(bilgi.yarim?'#ef6c00':'#6a1b9a'):(bilgi.haftaSonu?'#e53935':'#888');
+    const bg=bilgi.tatil&&!bilgi.haftaSonu?(bilgi.yarim?'#fff3e0':'#f3e5f5'):(bilgi.haftaSonu?'#fdeded':'#fff');
+    html+=`<th title="${bilgi.ad||''}" style="padding:2px 1px;text-align:center;color:${renk};background:${bg};min-width:26px;font-size:9px;font-weight:${bilgi.tatil?'800':'600'}">${dt.getDate()}<br><span style="color:${bilgi.tatil?renk:'#bbb'}">${['P','Pt','S','Ç','Pe','C','Ct'][dt.getDay()]}</span></th>`;
   });
   html+='</tr>';
   personeller.forEach(p=>{
@@ -2384,13 +2444,22 @@ function renderHeatmap(list){
     dates.forEach(d=>{
       const dayT=list.filter(g=>g.personel===p.ad&&g.tarih===d);
       const dk=dayT.reduce((s,g)=>s+(g.sure||0),0);
+      const bilgi=gunBilgisi(d);
+      const kapDk=gunlukMesaiDk(d)||GUNLUK_MESAI_DK;   // tatilde oran için tam gün baz alınır
       const pct=Math.min(dk/kapDk,1.2);
       const lv=izinler.filter(i=>i.personel===p.ad&&i.tarih===d);
       let bg='#f8fafc',title='Boş';
-      if(lv.length){bg='#e8d5ff';title='İzinli';}
+      if(bilgi.calisma===0){
+        // Mesai dışı gün: hafta sonu gri-kırmızı, resmî tatil mor
+        bg=bilgi.haftaSonu&&!bilgi.tatil?'#f1f3f7':'#ede0f5';
+        title=bilgi.ad;
+        if(dk>0){bg='#ffcc80';title=bilgi.ad+' — yine de '+(dk/60).toFixed(1)+'sa iş atanmış';}
+      }
+      else if(lv.length){bg='#e8d5ff';title='İzinli';}
       else if(dk>0&&pct<0.5){bg=`rgba(76,175,80,${0.25+pct})`;title=(dk/60).toFixed(1)+'sa';}
       else if(dk>0&&pct<1){bg=`rgba(255,152,0,${0.3+pct*0.6})`;title=(dk/60).toFixed(1)+'sa';}
       else if(dk>0){bg=`rgba(229,57,53,${Math.min(0.4+pct*0.5,1)})`;title=(dk/60).toFixed(1)+'sa (DOLU)';}
+      if(bilgi.yarim&&dk===0){bg='#fff3e0';title=bilgi.ad;}
       html+=`<td title="${title}" style="width:26px;height:26px;background:${bg};border:1px solid rgba(0,0,0,.04);text-align:center;font-size:8px;color:rgba(0,0,0,.5)">${dk>0?(dk/60).toFixed(0):''}</td>`;
     });
     html+='</tr>';
