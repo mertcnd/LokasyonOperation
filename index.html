@@ -811,6 +811,15 @@ let activeTab='gunluk';
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function thisMonth(){return today().slice(0,7)}
+// Tarih aralığı filtreleri varsayılan olarak içinde bulunulan ayı gösterir.
+function ayBasi(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'}
+function aySonu(){const d=new Date(),s=new Date(d.getFullYear(),d.getMonth()+1,0);
+  return s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0')}
+function tarihAraligiAyaAyarla(basId,bitId){
+  const b=document.getElementById(basId),s=document.getElementById(bitId);
+  if(b)b.value=ayBasi();
+  if(s)s.value=aySonu();
+}
 function fmtSaat(dk){return (dk/60).toFixed(1)}
 function fmtTL(v){return (v||0).toLocaleString('tr-TR',{minimumFractionDigits:2})+' TL'}
 function emptyRow(cols,txt){return `<tr><td colspan="${cols}" class="empty-row">${txt}</td></tr>`}
@@ -1271,17 +1280,18 @@ async function init(){
   markaFiltresiUygula();
 
   const t=today();
-  // Admin'de günlük görünüm bugüne sabitlenir; personelde tarih filtresi boş
-  // başlar ki kendisine atanmış tüm aktif işler (geçmiş/gelecek/tarihsiz) görünsün.
-  document.getElementById('g-fstart').value=adminMi()?t:'';
-  document.getElementById('g-fend').value=adminMi()?t:'';
+  // Tüm tarih aralığı filtreleri içinde bulunulan ayla başlar; kullanıcı
+  // dilediğinde değiştirir.
+  tarihAraligiAyaAyarla('g-fstart','g-fend');        // Günlük Durum
+  tarihAraligiAyaAyarla('r-fstart','r-fend');        // Raporlama
+  tarihAraligiAyaAyarla('m-fstart','m-fend');        // Maliyet
+  tarihAraligiAyaAyarla('a-fstart','a-fend');        // Arşiv
+  tarihAraligiAyaAyarla('todo-fstart','todo-fend');  // To Do (tarih aralığı açılırsa hazır gelsin)
+  // İzin ekleme formu bir filtre değil, kayıt formudur: bugüne sabit kalır ki
+  // yanlışlıkla bir aylık izin girilmesin.
   document.getElementById('izin-bas').value=t;
   document.getElementById('izin-bit').value=t;
   document.getElementById('izin-ay').value=thisMonth();
-  document.getElementById('r-fstart').value='2026-05-01';
-  document.getElementById('r-fend').value=t;
-  document.getElementById('m-fstart').value='2026-06-01';
-  document.getElementById('m-fend').value=t;
 
   refreshAllDropdowns();
   renderGorevler();
