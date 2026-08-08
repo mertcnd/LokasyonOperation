@@ -598,6 +598,22 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <tbody id="vm-tbody"></tbody>
       </table>
     </div>
+    <div class="card" id="vho-section" style="display:none">
+      <div class="card-title">Haftalık Özet Abonelikleri</div>
+      <div style="font-size:11.5px;color:#666;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:12px;line-height:1.55">
+        Seçilen marka için <b>her pazartesi 08:00'de</b> otomatik özet maili gider: kartlar, tüm adımlar, RET'ler, gecikmiş işler ve haftanın planı. Panel açık olmasa da çalışır.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:10px;align-items:end;margin-bottom:12px">
+        <div><div class="lbl">Marka</div><select id="vho-marka"></select></div>
+        <div><div class="lbl">Alıcı Adı</div><input type="text" id="vho-ad" placeholder="Örn: Esin Yıldız Turgut"></div>
+        <div><div class="lbl">E-posta</div><input type="email" id="vho-email" placeholder="ornek@firma.com"></div>
+        <div><button class="btn" onclick="haftalikAbonelikEkle()" style="white-space:nowrap">Ekle</button></div>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Marka</th><th>Alıcı</th><th>Son Gönderim</th><th>Durum</th><th>İşlem</th></tr></thead>
+        <tbody id="vho-tbody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -1052,6 +1068,9 @@ function sekmeleriGuncelle(){
   // Ürün kartı adını değiştirme de yalnızca yöneticide
   const kartAdBtn=document.getElementById('kart-ad-duzenle-btn');
   if(kartAdBtn)kartAdBtn.style.display=adminMi()?'':'none';
+  // Haftalık özet abonelikleri yalnızca yöneticide
+  const vhoSec=document.getElementById('vho-section');
+  if(vhoSec)vhoSec.style.display=adminMi()?'block':'none';
   // Kayıtlı simülasyon silme yalnızca yöneticide
   const simSilBtn=document.getElementById('sim-sil-btn');
   if(simSilBtn)simSilBtn.style.display=adminMi()?'':'none';
@@ -1358,6 +1377,7 @@ async function init(){
   renderVeriPersonel();
   renderVeriIsTurleri();
   renderVeriMarkalar();
+  if(adminMi())haftalikAbonelikleriYukle();
   renderIzinler();
   renderTodoList();
   renderMaliyetFiyatTbl();
@@ -2216,6 +2236,70 @@ async function markaRenkKaydet(ad,renk){
   markaRenkleri[ad]=renk;
   markaRenkleriYenile();
   await sbPatch('markalar','ad',ad,{renk});
+}
+// ─── HAFTALIK ÖZET ABONELİKLERİ ───────────────────────────────────────────────
+// Gönderimi Supabase tarafındaki pg_cron + "haftalik-ozet" fonksiyonu yapar;
+// panel yalnızca kimin hangi markayı alacağını yönetir.
+let haftalikAbonelikler=[];
+async function haftalikAbonelikleriYukle(){
+  haftalikAbonelikler=await sbGet('haftalik_ozet_abonelikleri','order=marka.asc');
+  renderHaftalikAbonelikler();
+}
+function renderHaftalikAbonelikler(){
+  const tbody=document.getElementById('vho-tbody');if(!tbody)return;
+  sel('vho-marka',markalar,'Marka seçin...');
+  tbody.innerHTML=haftalikAbonelikler.length?haftalikAbonelikler.map(a=>{
+    const son=a.son_gonderim?new Date(a.son_gonderim).toLocaleString('tr-TR',{dateStyle:'short',timeStyle:'short'}):'—';
+    return `<tr>
+      <td style="padding:9px 12px;font-size:12px">${markaChip(a.marka,12)}</td>
+      <td style="padding:9px 12px;font-size:12px"><strong>${(a.alici_ad||'—')}</strong><div style="font-size:11px;color:#888">${a.alici_email}</div></td>
+      <td style="padding:9px 12px;font-size:11px;color:#888">${son}</td>
+      <td style="padding:9px 12px">
+        <span onclick="haftalikAbonelikAcKapa('${a.id}')" style="cursor:pointer;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;background:${a.aktif?'#e8f5e9':'#f1f3f7'};color:${a.aktif?'#2e7d32':'#888'}">${a.aktif?'Aktif':'Pasif'}</span>
+      </td>
+      <td style="padding:9px 12px;white-space:nowrap">
+        <span onclick="haftalikOnizle('${a.marka.replace(/'/g,"\\'")}')" style="color:#1565c0;cursor:pointer;font-weight:600;font-size:12px;margin-right:12px">Önizle</span>
+        <span onclick="haftalikAbonelikSil('${a.id}')" style="color:#e53935;cursor:pointer;font-weight:600;font-size:12px">Sil</span>
+      </td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="empty-row">Henüz abonelik eklenmedi.</td></tr>';
+}
+async function haftalikAbonelikEkle(){
+  if(!adminMi()){sbToast('Bu işlem yalnızca yöneticide.');return}
+  const marka=document.getElementById('vho-marka').value;
+  const ad=document.getElementById('vho-ad').value.trim();
+  const email=document.getElementById('vho-email').value.trim();
+  if(!marka){alert('Marka seçiniz.');return}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){alert('Geçerli bir e-posta adresi giriniz.');return}
+  if(haftalikAbonelikler.some(a=>a.marka===marka&&a.alici_email.toLowerCase()===email.toLowerCase())){
+    alert('Bu marka için bu adres zaten kayıtlı.');return;
+  }
+  const yeni={id:uid(),marka,alici_ad:ad,alici_email:email,aktif:true,
+    olusturan:todoSahipAdi(),olusturma_tarihi:today()};
+  haftalikAbonelikler.push(yeni);
+  document.getElementById('vho-ad').value='';document.getElementById('vho-email').value='';
+  renderHaftalikAbonelikler();
+  const ok=await sbPost('haftalik_ozet_abonelikleri',yeni);
+  if(ok===false){haftalikAbonelikler=haftalikAbonelikler.filter(x=>x.id!==yeni.id);renderHaftalikAbonelikler();return}
+  sbToast('✔ Abonelik eklendi: '+marka+' → '+email);
+}
+async function haftalikAbonelikAcKapa(id){
+  if(!adminMi()){sbToast('Bu işlem yalnızca yöneticide.');return}
+  const a=haftalikAbonelikler.find(x=>x.id===id);if(!a)return;
+  a.aktif=!a.aktif;
+  renderHaftalikAbonelikler();
+  await sbPatch('haftalik_ozet_abonelikleri','id',id,{aktif:a.aktif});
+}
+async function haftalikAbonelikSil(id){
+  if(!adminMi()){sbToast('Bu işlem yalnızca yöneticide.');return}
+  const a=haftalikAbonelikler.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`"${a.marka} → ${a.alici_email}" aboneliği silinecek. Emin misiniz?`))return;
+  haftalikAbonelikler=haftalikAbonelikler.filter(x=>x.id!==id);
+  renderHaftalikAbonelikler();
+  await sbDel('haftalik_ozet_abonelikleri','id',id);
+}
+// Mailin o anki hâlini yeni sekmede gösterir (gönderim yapılmaz)
+function haftalikOnizle(marka){
+  window.open(`${SB_URL}/functions/v1/haftalik-ozet?onizleme=1&marka=${encodeURIComponent(marka)}`,'_blank');
 }
 async function markaRenkSifirla(ad){
   if(!adminMi()){sbToast('Marka rengini yalnızca yönetici değiştirebilir.');return}
