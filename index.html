@@ -2297,9 +2297,40 @@ async function haftalikAbonelikSil(id){
   renderHaftalikAbonelikler();
   await sbDel('haftalik_ozet_abonelikleri','id',id);
 }
-// Mailin o anki hâlini yeni sekmede gösterir (gönderim yapılmaz)
-function haftalikOnizle(marka){
-  window.open(`${SB_URL}/functions/v1/haftalik-ozet?onizleme=1&marka=${encodeURIComponent(marka)}`,'_blank');
+// Mailin o anki hâlini gösterir (gönderim yapılmaz).
+// NOT: Supabase, Edge Function yanıtlarını text/plain olarak zorluyor; fonksiyon
+// URL'si doğrudan açılırsa tarayıcı HTML'i kaynak kod gibi gösteriyor. Bu yüzden
+// içerik burada alınıp iframe içinde gösteriliyor.
+let ozetOnizlemeHtml='';
+async function haftalikOnizle(marka){
+  showLoading('Önizleme hazırlanıyor...');
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/haftalik-ozet?onizleme=1&marka=${encodeURIComponent(marka)}`,
+      {headers:{'apikey':SB_KEY}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    ozetOnizlemeHtml=await r.text();
+    document.getElementById('ozet-onizleme-baslik').textContent=marka+' · haftalık özet önizlemesi';
+    document.getElementById('ozet-onizleme-frame').srcdoc=ozetOnizlemeSayfasi(ozetOnizlemeHtml);
+    document.getElementById('ozet-onizleme-modal').style.display='flex';
+  }catch(e){
+    console.error('Önizleme hatası:',e);
+    sbToast('Önizleme alınamadı: '+e.message);
+  }finally{ hideLoading(); }
+}
+function ozetOnizlemeSayfasi(govde){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8">'+
+    '<style>body{margin:0;padding:18px;background:#eef1f6;font-family:Arial,Helvetica,sans-serif}</style>'+
+    '</head><body>'+govde+'</body></html>';
+}
+function ozetOnizlemeKapat(){
+  document.getElementById('ozet-onizleme-modal').style.display='none';
+  document.getElementById('ozet-onizleme-frame').srcdoc='';
+}
+function ozetOnizlemeYeniSekme(){
+  if(!ozetOnizlemeHtml)return;
+  const url=URL.createObjectURL(new Blob([ozetOnizlemeSayfasi(ozetOnizlemeHtml)],{type:'text/html'}));
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 async function markaRenkSifirla(ad){
   if(!adminMi()){sbToast('Marka rengini yalnızca yönetici değiştirebilir.');return}
@@ -4411,6 +4442,19 @@ if(document.readyState==='loading'){
 
 
 <!-- DOSYA KARŞILAŞTIRMA MODAL -->
+<!-- ══ HAFTALIK ÖZET ÖNİZLEME ═════════════════════════════════════════════ -->
+<div id="ozet-onizleme-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,20,35,.75);z-index:9998;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:900px;height:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 50px rgba(0,0,0,.35)">
+    <div style="padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px">
+      <div id="ozet-onizleme-baslik" style="font-size:14px;font-weight:700;color:#1a237e"></div>
+      <div style="font-size:11px;color:#888">Mailin gönderilecek hâli — bu ekran gönderim yapmaz.</div>
+      <button onclick="ozetOnizlemeYeniSekme()" class="btn btn-sm" style="margin-left:auto;background:#455a64;white-space:nowrap">Yeni sekmede aç</button>
+      <button onclick="ozetOnizlemeKapat()" style="background:none;border:none;cursor:pointer;font-size:24px;color:#bbb;line-height:1">×</button>
+    </div>
+    <iframe id="ozet-onizleme-frame" style="flex:1;border:none;width:100%;background:#eef1f6"></iframe>
+  </div>
+</div>
+
 <!-- ══ KARŞILAŞTIRMA BÜYÜTME EKRANI ═══════════════════════════════════════ -->
 <div id="kars-buyut" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#141a2b;z-index:9999;flex-direction:column">
   <div style="background:#1a237e;color:#fff;padding:9px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0">
