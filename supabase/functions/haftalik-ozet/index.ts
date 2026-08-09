@@ -109,12 +109,11 @@ async function ozetUret(marka: string) {
             <td style="padding:7px 8px;font-size:12px;color:#888;border-bottom:1px solid #f0f3f8;width:26px">${a.sira ?? ""}</td>
             <td style="padding:7px 8px;font-size:12px;font-weight:600;color:${ret ? "#c62828" : "#222"};border-bottom:1px solid #f0f3f8">${esc(a.ad)}</td>
             <td style="padding:7px 8px;font-size:12px;color:#555;border-bottom:1px solid #f0f3f8">${esc(a.is_turu || "—")}</td>
-            <td style="padding:7px 8px;font-size:12px;color:#555;border-bottom:1px solid #f0f3f8;white-space:nowrap">${esc(a.atanan || "—")}</td>
             <td style="padding:7px 8px;font-size:12px;color:${gec ? "#c62828" : "#555"};border-bottom:1px solid #f0f3f8;white-space:nowrap">${trTarih(a.tarih)}${gec ? " ⚠" : ""}</td>
             <td style="padding:7px 8px;border-bottom:1px solid #f0f3f8;text-align:right">${rozet(a.durum)}</td>
           </tr>`
         }).join("")
-      : `<tr><td colspan="6" style="padding:12px;font-size:12px;color:#aaa;font-style:italic">Bu karta henüz adım eklenmemiş.</td></tr>`
+      : `<tr><td colspan="5" style="padding:12px;font-size:12px;color:#aaa;font-style:italic">Bu karta henüz adım eklenmemiş.</td></tr>`
 
     return `<div style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:16px;overflow:hidden">
       <div style="background:#f8fafc;padding:12px 14px;border-bottom:1px solid #e2e8f0">
@@ -122,7 +121,7 @@ async function ozetUret(marka: string) {
           ${k.kod ? `<span style="background:#1a237e;color:#fff;font-family:monospace;font-size:11px;padding:2px 8px;border-radius:5px;margin-right:8px">${esc(k.kod)}</span>` : ""}${esc(k.ad)}
         </div>
         <div style="font-size:11px;color:#888;margin-top:5px">
-          ${tam} / ${kAdim.length} adım tamamlandı · %${pct} &nbsp;·&nbsp; Durum: ${esc(k.durum || "—")}${k.olusturan ? " · Açan: " + esc(k.olusturan) : ""}
+          ${tam} / ${kAdim.length} adım tamamlandı · %${pct} &nbsp;·&nbsp; Durum: ${esc(k.durum || "—")}
         </div>
       </div>
       <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
@@ -130,7 +129,6 @@ async function ozetUret(marka: string) {
           <th style="padding:6px 8px;font-size:10px;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.4px">#</th>
           <th style="padding:6px 8px;font-size:10px;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.4px">Adım</th>
           <th style="padding:6px 8px;font-size:10px;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.4px">İş Türü</th>
-          <th style="padding:6px 8px;font-size:10px;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.4px">Sorumlu</th>
           <th style="padding:6px 8px;font-size:10px;color:#888;text-align:left;text-transform:uppercase;letter-spacing:.4px">Tarih</th>
           <th style="padding:6px 8px;font-size:10px;color:#888;text-align:right;text-transform:uppercase;letter-spacing:.4px">Durum</th>
         </tr>
@@ -159,7 +157,7 @@ async function ozetUret(marka: string) {
         <div style="font-size:13px;font-weight:800;color:#c62828;margin-bottom:6px">⛔ RET verilen adımlar</div>
         ${retler.map((a) => {
           const k = kartlar.find((x) => x.id === a.kart_id)
-          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.kod ? k.kod + " " : "")}${esc(k?.ad || "")}${a.atanan ? " · " + esc(a.atanan) : ""}</div>`
+          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.kod ? k.kod + " " : "")}${esc(k?.ad || "")}</div>`
         }).join("")}
       </div>` : ""}
 
@@ -167,7 +165,7 @@ async function ozetUret(marka: string) {
         <div style="font-size:13px;font-weight:800;color:#e65100;margin-bottom:6px">⚠ Tarihi geçmiş adımlar</div>
         ${gecikmis.slice(0, 15).map((a) => {
           const k = kartlar.find((x) => x.id === a.kart_id)
-          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.ad || "")} · hedef ${trTarih(a.tarih)}${a.atanan ? " · " + esc(a.atanan) : ""}</div>`
+          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.ad || "")} · hedef ${trTarih(a.tarih)}</div>`
         }).join("")}
         ${gecikmis.length > 15 ? `<div style="font-size:11px;color:#888;margin-top:6px">…ve ${gecikmis.length - 15} adım daha</div>` : ""}
       </div>` : ""}
