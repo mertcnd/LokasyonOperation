@@ -23,7 +23,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f7;color:#2d3748;fo
 .card-title{font-size:15px;font-weight:700;color:#1565c0;border-bottom:2px solid #1565c0;padding-bottom:10px;margin-bottom:18px}
 /* FORM */
 .lbl{font-size:11px;color:#666;font-weight:600;margin-bottom:4px}
-input[type=text],input[type=number],input[type=date],input[type=month],select,textarea{border:1px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:13px;background:#fff;color:#333;outline:none;width:100%;font-family:inherit}
+input[type=text],input[type=number],input[type=date],input[type=month],input[type=email],input[type=password],select,textarea{border:1px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:13px;background:#fff;color:#333;outline:none;width:100%;font-family:inherit}
 input:focus,select:focus,textarea:focus{border-color:#1565c0;box-shadow:0 0 0 2px rgba(21,101,192,.1)}
 .btn{border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:#1565c0}
 .btn:hover{opacity:.9}
@@ -598,15 +598,15 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <tbody id="vm-tbody"></tbody>
       </table>
     </div>
-    <div class="card" id="vho-section" style="display:none">
+    <div class="card" id="vho-section" style="display:none;grid-column:1/-1">
       <div class="card-title">Haftalık Özet Abonelikleri</div>
       <div style="font-size:11.5px;color:#666;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:12px;line-height:1.55">
         Seçilen marka için <b>her pazartesi 08:00'de</b> otomatik özet maili gider: kartlar, tüm adımlar, RET'ler, gecikmiş işler ve haftanın planı. Panel açık olmasa da çalışır.
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:10px;align-items:end;margin-bottom:12px">
-        <div><div class="lbl">Marka</div><select id="vho-marka"></select></div>
-        <div><div class="lbl">Alıcı Adı</div><input type="text" id="vho-ad" placeholder="Örn: İsim Soyisim"></div>
-        <div><div class="lbl">E-posta</div><input type="email" id="vho-email" placeholder="ornek@firma.com"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:12px">
+        <div style="flex:1 1 170px;max-width:230px"><div class="lbl">Marka</div><select id="vho-marka"></select></div>
+        <div style="flex:1 1 190px;max-width:270px"><div class="lbl">Alıcı Adı</div><input type="text" id="vho-ad" placeholder="Örn: İsim Soyisim"></div>
+        <div style="flex:1 1 220px;max-width:330px"><div class="lbl">E-posta</div><input type="email" id="vho-email" placeholder="ornek@firma.com"></div>
         <div><button class="btn" onclick="haftalikAbonelikEkle()" style="white-space:nowrap">Ekle</button></div>
       </div>
       <table class="tbl">
