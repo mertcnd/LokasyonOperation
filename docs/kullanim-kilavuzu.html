@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Operasyon Paneli — Kullanım Kılavuzu</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color:#23272f; font-size:10.5pt; line-height:1.55; margin:0; }
+  h1,h2,h3 { color:#1a237e; margin:0; }
+  a { color:#1565c0; text-decoration:none; }
+  code { font-family:"SF Mono",Menlo,Consolas,monospace; font-size:9pt; background:#f1f3f8; padding:1px 5px; border-radius:4px; }
+
+  /* KAPAK */
+  .kapak { height:247mm; display:flex; flex-direction:column; justify-content:center; page-break-after:always; break-after:page; }
+  .kapak .marka { font-size:11pt; letter-spacing:3px; color:#8a91a0; text-transform:uppercase; margin-bottom:14px; }
+  .kapak h1 { font-size:34pt; line-height:1.1; letter-spacing:-1px; }
+  .kapak .alt { font-size:14pt; color:#5b6472; margin-top:10px; font-weight:500; }
+  .kapak .cizgi { height:5px; width:90px; background:#1a237e; margin:26px 0; border-radius:3px; }
+  .kapak .meta { font-size:9.5pt; color:#8a91a0; line-height:1.9; }
+  .kapak .kutu { margin-top:40px; background:#f6f8fc; border:1px solid #e2e8f0; border-left:4px solid #1a237e; border-radius:8px; padding:16px 18px; font-size:10pt; color:#3c4450; }
+
+  /* İÇİNDEKİLER */
+  .ic { page-break-after:always; break-after:page; }
+  .ic ol { margin:0; padding-left:20px; }
+  .ic li { margin:7px 0; }
+  .ic .n { color:#8a91a0; }
+
+  section { page-break-inside:auto; }
+  h2 { font-size:17pt; margin:0 0 4px; padding-bottom:7px; border-bottom:2px solid #1a237e; page-break-after:avoid; }
+  h2 .no { color:#c3c8d4; margin-right:10px; }
+  h3 { font-size:12pt; margin:16px 0 5px; page-break-after:avoid; }
+  p { margin:6px 0; }
+  ul,ol { margin:6px 0; padding-left:18px; }
+  li { margin:3px 0; }
+  .yeni-sayfa { page-break-before:always; break-before:page; }
+
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:9.5pt; page-break-inside:avoid; }
+  th { background:#f6f8fc; text-align:left; padding:7px 9px; font-size:8.5pt; text-transform:uppercase; letter-spacing:.4px; color:#5b6472; border-bottom:2px solid #e2e8f0; }
+  td { padding:7px 9px; border-bottom:1px solid #eef1f6; vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+
+  .not, .uyari, .ipucu { border-radius:8px; padding:11px 14px; margin:12px 0; font-size:9.5pt; page-break-inside:avoid; }
+  .not   { background:#f6f8fc; border-left:4px solid #1565c0; }
+  .uyari { background:#fff5f5; border-left:4px solid #e53935; }
+  .ipucu { background:#f3faf4; border-left:4px solid #2e7d32; }
+  .not > b:first-child, .uyari > b:first-child, .ipucu > b:first-child { display:block; margin-bottom:3px; }
+
+  .rozet { display:inline-block; border-radius:11px; padding:2px 9px; font-size:8.5pt; font-weight:700; white-space:nowrap; }
+  .r-bek { background:#fff3e0; color:#e65100; }
+  .r-dev { background:#e3f2fd; color:#1565c0; }
+  .r-tam { background:#e8f5e9; color:#2e7d32; }
+  .r-ret { background:#ffebee; color:#c62828; border:1px solid #ef9a9a; }
+
+  .adimlar { counter-reset:ad; margin:8px 0; padding:0; list-style:none; }
+  .adimlar li { counter-increment:ad; position:relative; padding-left:26px; margin:6px 0; }
+  .adimlar li::before { content:counter(ad); position:absolute; left:0; top:1px; width:18px; height:18px; border-radius:50%;
+    background:#1a237e; color:#fff; font-size:8pt; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  .akis { display:flex; align-items:stretch; gap:6px; margin:14px 0; page-break-inside:avoid; }
+  .akis .kut { flex:1; border:1px solid #d7dded; border-radius:8px; padding:9px 8px; text-align:center; font-size:8.5pt; background:#fbfcff; }
+  .akis .kut b { display:block; font-size:9.5pt; color:#1a237e; margin-bottom:2px; }
+  .akis .ok { align-self:center; color:#b9c0d0; font-size:13pt; }
+
+  .ikili { display:flex; gap:12px; page-break-inside:avoid; }
+  .ikili > div { flex:1; }
+
+  .lejant { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0; }
+  .lejant span { font-size:8.5pt; padding:3px 9px; border-radius:11px; border:1px solid #e2e8f0; }
+
+  footer { position:fixed; bottom:-12mm; left:0; right:0; font-size:8pt; color:#a8aebc; text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ KAPAK ══════════ -->
+<div class="kapak">
+  <div class="marka">Lokasyon İstanbul</div>
+  <h1>Operasyon Paneli</h1>
+  <div class="alt">Kullanım Kılavuzu</div>
+  <div class="cizgi"></div>
+  <div class="meta">
+    Sürüm: Ağustos 2026<br>
+    Adres: <b>lokasyonpanel.up.railway.app</b><br>
+    Kapsam: Günlük iş takibi, ürün kartları, doküman kontrolü, raporlama
+  </div>
+  <div class="kutu">
+    Bu kılavuz paneli günlük işinde kullanan herkes için yazıldı. Yalnızca
+    yöneticinin görebildiği bölümler ayrıca <b>“yalnızca yönetici”</b> notuyla
+    işaretlendi. Ekranınızda bu kılavuzdaki bazı sekmeleri görmüyorsanız,
+    hesabınıza o sekmeler tanımlanmamış demektir; yöneticinize başvurun.
+  </div>
+</div>
+
+<!-- ══════════ İÇİNDEKİLER ══════════ -->
+<div class="ic">
+  <h2>İçindekiler</h2>
+  <ol>
+    <li>Panele giriş ve roller</li>
+    <li>Günlük Durum — günün işleri</li>
+    <li>Ürün Kartları — işin merkezi</li>
+    <li>Doküman kontrolü ve PDF üzerine not</li>
+    <li>Dosya karşılaştırma (revize kontrolü)</li>
+    <li>İzinler</li>
+    <li>Görevler (To-Do)</li>
+    <li>Raporlama ve personel yük haritası</li>
+    <li>Maliyet ve Simülasyon</li>
+    <li>Arşiv</li>
+    <li>Veri Yönetimi <span class="n">(yalnızca yönetici)</span></li>
+    <li>Otomatik e-postalar</li>
+    <li>Kısayollar, sık sorulanlar ve sorun giderme</li>
+  </ol>
+</div>
+
+<!-- ══════════ 1 ══════════ -->
+<section>
+<h2><span class="no">1</span>Panele giriş ve roller</h2>
+
+<p>Panele tarayıcıdan <b>lokasyonpanel.up.railway.app</b> adresiyle girilir.
+Kullanıcı adı ve şifreniz yönetici tarafından tanımlanır. Giriş yaptıktan
+sonra oturumunuz açık kalır; farklı bir bilgisayarda çalışacaksanız yeniden
+giriş yapmanız gerekir.</p>
+
+<h3>İki rol vardır</h3>
+<table>
+  <tr><th style="width:22%">Rol</th><th>Ne yapabilir</th></tr>
+  <tr>
+    <td><b>Personel</b></td>
+    <td>Kendisine atanmış işleri görür ve durumlarını günceller. Ürün kartlarını açar, adım ekler, doküman yükler, doküman üzerine not düşer. Kendi izin talebini girer. Kendi To-Do notlarını yönetir.</td>
+  </tr>
+  <tr>
+    <td><b>Yönetici</b></td>
+    <td>Her şeyi görür. Ek olarak: ürün kartı adını değiştirme ve silme, marka rengi belirleme, kayıtlı simülasyon silme, haftalık özet abonelikleri, personel/iş türü/marka tanımları ve kullanıcı yönetimi.</td>
+  </tr>
+</table>
+
+<div class="not">
+  <b>Sekme ve marka görünürlüğü</b>
+  Yönetici her kullanıcı için hangi sekmeleri ve hangi markaları göreceğini
+  ayrı ayrı seçebilir. Bu ayarlar değiştirildiğinde, ilgili kullanıcı
+  <b>çıkış yapıp yeniden girene kadar</b> etkili olmaz.
+</div>
+</section>
+
+<!-- ══════════ 2 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">2</span>Günlük Durum — günün işleri</h2>
+
+<p>Açılış ekranıdır. Ürün kartlarındaki <b>adımları</b> tek listede gösterir.
+Personel hesabında yalnızca size atanmış işler, yönetici hesabında herkesinki
+listelenir.</p>
+
+<h3>Filtreler</h3>
+<p>Üstteki satırdan Başlangıç/Bitiş tarihi, Personel, Marka ve Durum
+seçebilirsiniz. <b>Tarih seçmediğiniz sürece her şey görünür</b> — geçmişe
+sarkan gecikmiş işler ve henüz tarih atanmamış adımlar dâhil. Tarih
+seçtiğinizde yalnızca o aralıktakiler kalır.</p>
+
+<h3>Renkler ne anlatıyor</h3>
+<p>Her satırın solundaki renkli şerit ve kart adının yanındaki nokta
+<b>markayı</b> gösterir; böylece alt alta gelen işler birbirine karışmaz.
+Durum sütunundaki rozet ise işin hâlini verir:</p>
+<div class="lejant">
+  <span><span class="rozet r-bek">Bekliyor</span> &nbsp;henüz başlanmadı</span>
+  <span><span class="rozet r-dev">Devam Ediyor</span> &nbsp;üzerinde çalışılıyor</span>
+  <span><span class="rozet r-tam">Tamamlandı</span> &nbsp;bitti</span>
+  <span><span class="rozet r-ret">RET</span> &nbsp;iş geri döndü</span>
+</div>
+
+<h3>Ne yapabilirsiniz</h3>
+<ul>
+  <li><b>Durumu değiştirmek:</b> satırın sağındaki açılır listeden. Değişiklik anında kaydedilir.</li>
+  <li><b>Kartı açmak:</b> satıra tıklayınca ilgili ürün kartının detayına gider.</li>
+  <li><b>Arşive göndermek:</b> turuncu 📦 düğmesi.</li>
+  <li><b>Dışa aktarmak:</b> “CSV İndir” filtrelenmiş listeyi indirir.</li>
+</ul>
+
+<div class="uyari">
+  <b>Üstteki kırmızı bant</b>
+  Tarihi geçmiş adımlar ve 3 gün içinde tarihi dolacak işler burada listelenir.
+  İşin adına tıklayarak doğrudan ilgili karta gidebilirsiniz. Sağdaki × ile
+  kapatılır, sayfa yenilenince tekrar gelir.
+</div>
+</section>
+
+<!-- ══════════ 3 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">3</span>Ürün Kartları — işin merkezi</h2>
+
+<p>Her ürün bir <b>karttır</b>; kartın altında sıralı <b>adımlar</b> bulunur.
+Panelin geri kalanı (günlük durum, raporlama, maliyet, arşiv) bu adımlardan
+beslenir.</p>
+
+<div class="akis">
+  <div class="kut"><b>Kart</b>Ürün / iş</div>
+  <div class="ok">→</div>
+  <div class="kut"><b>Adımlar</b>Preflight, Repro, GMG…</div>
+  <div class="ok">→</div>
+  <div class="kut"><b>Durum</b>Bekliyor → Tamamlandı</div>
+  <div class="ok">→</div>
+  <div class="kut"><b>Rapor</b>Yük, maliyet, arşiv</div>
+</div>
+
+<h3>Yeni kart açmak</h3>
+<ol class="adimlar">
+  <li>Sağ üstten <b>+ Yeni Ürün Kartı</b>.</li>
+  <li>Marka, ürün adı ve açan kişiyi seçin. Kart kodu (LK0001…) otomatik verilir.</li>
+  <li>İsterseniz hazır bir <b>iş akışı şablonu</b> seçin — adımlar tek seferde oluşur.</li>
+</ol>
+
+<h3>Kart listesi</h3>
+<p>Kartlar marka rengine göre sol kenardan renklendirilir. Kartın altındaki
+satır o an dikkat isteyen adımı gösterir; bir adım RET ise kırmızı olarak
+<b>⛔ RET: &lt;adım&gt;</b> yazar, yani kartı açmadan işin geri döndüğünü
+görürsünüz. Üstteki filtrelerden markaya, duruma ve kart adı/koduna göre
+arayabilirsiniz.</p>
+
+<h3>Adımlarla çalışmak</h3>
+<ul>
+  <li><b>Adım eklemek:</b> kart detayının altındaki “Adım Ekle” bölümünden. İş türü ve zorluk seçilince süre otomatik dolar.</li>
+  <li><b>Sıralamak:</b> adımın sağındaki ▲▼ düğmeleri.</li>
+  <li><b>Detayı açmak:</b> adıma tıklayın — sorumlu, hedef tarih, zorluk, süre sayacı ve notlar açılır.</li>
+  <li><b>Süre tutmak:</b> ▶ Başlat / ⏸ Durdur ile fiilî süre kaydedilir; ideal süreyle karşılaştırılır (aşarsa kırmızı gösterilir).</li>
+</ul>
+
+<h3>RET durumu</h3>
+<p>Bir iş geri döndüğünde adımın durumunu <span class="rozet r-ret">RET</span>
+yapın. Adım baştan aşağı kırmızıya döner, kart kapağında öne çıkar ve
+raporlamada ayrı sayılır.</p>
+<div class="not">
+  <b>RET’in üç davranışı</b>
+  <ul style="margin:2px 0 0">
+    <li>“Tamamlandı” sayılmaz, ilerleme yüzdesine katılmaz.</li>
+    <li>Sonraki adımın sorumlusuna bildirim maili <b>gitmez</b>.</li>
+    <li>Tarihi geçmişse gecikme uyarısında görünmeye devam eder.</li>
+  </ul>
+</div>
+
+<h3>Klasör adı kopyalama</h3>
+<p>Kart detayındaki 📁 satırı, dosya sunucusunda kullanılacak standart klasör
+adını üretir (<code>LK0010_Tazelen_Urun_Adi</code>). “Kopyala” ile alıp
+doğrudan yapıştırabilirsiniz.</p>
+
+<div class="ipucu">
+  <b>Yalnızca yönetici</b>
+  Kart adını değiştirme (✏️ Adı Düzenle) ve kartı silme (🗑 Sil) yalnızca
+  yönetici hesabında görünür. Ad değiştiğinde klasör adı da otomatik güncellenir.
+</div>
+</section>
+
+<!-- ══════════ 4 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">4</span>Doküman kontrolü ve PDF üzerine not</h2>
+
+<p>Kart detayındaki <b>Dokümanlar</b> bölümüne PDF, görsel ve ofis dosyaları
+yüklenir. PDF ve görsellerin yanında <b>📝 Notlar</b> düğmesi çıkar; dosya
+panelin içinde açılır ve üzerine işaretleme yapılabilir.</p>
+
+<h3>Nasıl not düşülür</h3>
+<ol class="adimlar">
+  <li>Dosyanın yanındaki <b>📝 Notlar</b> düğmesine basın.</li>
+  <li>Üstteki araçlardan birini seçin: <b>📍 İğne</b> (tek nokta), <b>▭ Kutu</b> (alan), <b>➜ Ok</b> (yön göster), <b>🖍 Vurgu</b> (metin vurgula).</li>
+  <li>Belge üzerine tıklayın veya sürükleyin.</li>
+  <li>Sağda açılan kutuya notu yazıp <b>Kaydet</b>’e basın.</li>
+</ol>
+
+<h3>Notların takibi</h3>
+<ul>
+  <li>Her not numaralı bir işaretle belgeye sabitlenir; sağdaki listede aynı numarayla görünür.</li>
+  <li>Listedeki nota tıklayınca ilgili sayfaya gidilir.</li>
+  <li>Düzeltme yapıldığında <b>✔</b> ile “çözüldü” işaretlenir; işaret yeşile döner ve listeden düşer. “Çözülenleri göster” kutusuyla geri getirilir.</li>
+  <li>Doküman satırında açık not sayısı rozet olarak görünür (<b>📝 Notlar (3)</b>) — dosyayı açmadan revize olup olmadığı anlaşılır.</li>
+</ul>
+
+<div class="not">
+  <b>Notların yeri neden kaymaz</b>
+  İşaretler sayfaya göre oransal saklanır. Kim hangi ekranda, hangi
+  yakınlaştırmayla açarsa açsın not hep aynı yerde durur.
+</div>
+
+<div class="ipucu">
+  <b>Yetki</b>
+  Notu yalnızca yazan kişi (veya yönetici) silebilir. “Çözüldü” işaretlemeyi
+  herkes yapabilir — düzeltmeyi yapan kişi maddeyi kapatabilsin diye.
+</div>
+
+<p><b>Kısayollar:</b> <code>←</code> <code>→</code> sayfa değiştirir,
+<code>Esc</code> kapatır. <code>⤢</code> sayfayı ekrana sığdırır.</p>
+</section>
+
+<!-- ══════════ 5 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">5</span>Dosya karşılaştırma (revize kontrolü)</h2>
+
+<p>Kart detayındaki <b>🔍 Dosya Karşılaştır</b> düğmesi, iki dosyayı piksel
+piksel karşılaştırır. Revize gelen bir dosyada neyin değiştiğini bulmak için
+kullanılır.</p>
+
+<ol class="adimlar">
+  <li>Dosya A (orijinal) ve Dosya B (revize) seçin — PDF, JPG veya PNG.</li>
+  <li>Çok sayfalı PDF ise sayfa numarasını girin.</li>
+  <li><b>Karşılaştır</b>’a basın. Üç görsel çıkar: A, B ve farkların kırmızı işaretlendiği görüntü.</li>
+  <li>Görsellerden birine tıklayın — tam ekran açılır.</li>
+</ol>
+
+<h3>Tam ekran incelemede</h3>
+<ul>
+  <li>Fare tekerleğiyle yakınlaşın, sürükleyerek gezinin.</li>
+  <li><code>1</code> / <code>2</code> / <code>3</code> tuşlarıyla A ↔ B ↔ Farklar arasında geçiş yapın: <b>yakınlaştırma ve konum korunur</b>, böylece aynı noktada iki dosya arasında gidip gelerek değişikliği gözle yakalarsınız.</li>
+  <li><code>1:1</code> gerçek piksel boyutunu verir; <code>0</code> ekrana sığdırır, <code>Esc</code> kapatır.</li>
+</ul>
+
+<div class="not">
+  <b>Dosyalar hiçbir yere yüklenmez</b>
+  Karşılaştırma tamamen tarayıcınızda yapılır; seçtiğiniz dosyalar panele veya
+  sunucuya gönderilmez.
+</div>
+</section>
+
+<!-- ══════════ 6-7 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">6</span>İzinler</h2>
+<p>Personel kendi izin talebini girer: başlangıç–bitiş tarihi ve süre
+(2 saat / 4 saat / tam gün). Kayıt, seçilen aralıktaki her gün için ayrı ayrı
+oluşturulur.</p>
+<ul>
+  <li>Personel yalnızca kendi izinlerini görür; yönetici hepsini görür.</li>
+  <li>İzinler <b>kapasite hesabına ve yük haritasına otomatik yansır</b>.</li>
+  <li>Ay seçiciyle geçmiş aylara bakabilirsiniz.</li>
+</ul>
+<div class="uyari">
+  <b>Dikkat</b>
+  İzin formundaki tarihler bilerek <b>bugüne sabit</b> gelir. Ay aralığıyla
+  açılsaydı, dalgınlıkla “Kaydet” denince bir aylık izin girilmiş olurdu.
+</div>
+
+<h2 style="margin-top:26px"><span class="no">7</span>Görevler (To-Do)</h2>
+<p>Kişisel not defteridir; ürün kartlarından bağımsızdır. Başlık, açıklama,
+hedef tarih ve isterseniz bir kişiye atama yaparak not oluşturursunuz.</p>
+<div class="ipucu">
+  <b>Notlarınız kişiseldir</b>
+  Yalnızca <b>sizin yazdığınız</b> ve <b>size atanan</b> notlar listenizde
+  görünür. Notu yalnızca yazan kişi silebilir; size atanmış bir notu
+  tamamlandı işaretleyebilir ama silemezsiniz. Yönetici tümünü görür.
+</div>
+<p>Sekmedeki kırmızı rozet, tamamlanmamış not sayınızı gösterir. Aktif /
+Tamamlanan / Tümü filtreleri ve tarih aralığı ile listeyi daraltabilirsiniz.</p>
+</section>
+
+<!-- ══════════ 8 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">8</span>Raporlama ve personel yük haritası</h2>
+
+<p>Seçilen tarih aralığı için iş yükü, kapasite ve durum dağılımını gösterir.
+Varsayılan olarak <b>içinde bulunulan ay</b> gelir.</p>
+
+<h3>Üstteki kutular</h3>
+<table>
+  <tr><th style="width:32%">Kutu</th><th>Anlamı</th></tr>
+  <tr><td>Toplam Plan (Yük)</td><td>Seçilen aralıktaki adımların ideal süreleri toplamı</td></tr>
+  <tr><td>Toplam Kapasite</td><td>Ekibin o aralıkta çalışabileceği toplam saat</td></tr>
+  <tr><td>NET Boşluk / NET Fazla</td><td>Kapasite ile planlanan iş arasındaki fark</td></tr>
+</table>
+
+<h3>Kapasite nasıl hesaplanıyor</h3>
+<p>Takvim günü değil <b>mesai günü</b> esas alınır:</p>
+<table>
+  <tr><th>Gün</th><th>Sayılan süre</th></tr>
+  <tr><td>Normal iş günü</td><td>8 saat</td></tr>
+  <tr><td>Arife (Ramazan, Kurban ve 28 Ekim)</td><td>4 saat</td></tr>
+  <tr><td>Hafta sonu ve resmî tatil</td><td>0 saat</td></tr>
+</table>
+<p>Resmî tatiller her yıl otomatik hesaplanır — dini bayramlar dâhil, elle
+liste güncellemeye gerek yoktur. İzinler kapasiteden düşülür.</p>
+
+<h3>Personel yük haritası</h3>
+<p>Kişi × gün ızgarasında kimin ne kadar dolu olduğunu gösterir.</p>
+<div class="lejant">
+  <span>🟢 Boş</span><span>🟠 Dolu</span><span>🔴 Aşırı yük</span>
+  <span>🟣 İzinli</span><span>⬜ Hafta sonu</span><span>🟪 Resmî tatil</span><span>🟧 Arife (yarım gün)</span>
+</div>
+<p>Gün başlığının üzerine gelince tatilin adı görünür. Bir tatil gününe iş
+atanmışsa hücre amber renkte uyarır. Harita en fazla 62 günlük aralık için
+çizilir.</p>
+</section>
+
+<!-- ══════════ 9-10 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">9</span>Maliyet ve Simülasyon</h2>
+<p><b>Maliyet</b> sekmesi, seçilen müşteri ve tarih aralığı için yapılan
+işlerin maliyetini ve fiyat listesine göre gelirini karşılaştırır; marj
+verir. Fiyatlar iş türü ve zorluk bazında, istenirse markaya özel tanımlanır.
+Listeyi CSV, teklifi PDF olarak dışa aktarabilirsiniz.</p>
+
+<p><b>Simülasyon</b> sekmesi “şu kadar işi şu kadar günde bitirmek için kaç
+kişi gerekir?” sorusunu yanıtlar. İş paketlerini (iş türü × adet × zorluk)
+girip hedef süreyi <b>iş günü</b> olarak yazarsınız. Senaryoyu kaydedip sonra
+tekrar yükleyebilirsiniz; kayıtlı simülasyonu silmek yalnızca yöneticide.</p>
+
+<h2 style="margin-top:26px"><span class="no">10</span>Arşiv</h2>
+<p>Biten işler arşive gönderilir ve aktif listeleri şişirmez. Arşiv sekmesinden
+tarih, marka, personel, iş türü ve ada göre arayabilir, kaydı geri
+alabilirsiniz. Arşivlenen adımlar kapasite ve günlük listelerden düşer.</p>
+</section>
+
+<!-- ══════════ 11 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">11</span>Veri Yönetimi <span style="font-size:10pt;color:#8a91a0">— yalnızca yönetici</span></h2>
+
+<h3>Personel Yönetimi</h3>
+<p>Personel adı, <b>e-posta</b>, seviye ve saatlik maliyet tanımlanır.</p>
+<div class="uyari">
+  <b>E-posta alanı boş bırakılmasın</b>
+  Adım tamamlandığında sıradaki işin sorumlusuna otomatik bildirim gider.
+  Kişinin e-postası tanımlı değilse <b>bildirim hiç gönderilmez</b>.
+</div>
+
+<h3>İş Türü Yönetimi</h3>
+<p>İş türleri ve basit/normal/kompleks süreleri burada tanımlanır. Adım
+eklerken süreler bu tablodan otomatik doldurulur.</p>
+
+<h3>Marka Yönetimi</h3>
+<p>Marka ekleme/silmenin yanında her markaya <b>renk</b> atanır. Bu renk ürün
+kartlarında ve günlük durum listesinde kullanılır; markaları bir bakışta
+ayırmayı sağlar. Renk seçilmezse marka adına göre otomatik bir renk atanır.</p>
+
+<h3>Haftalık Özet Abonelikleri</h3>
+<p>Bir markanın haftalık özetinin kime gideceği burada tanımlanır. Marka,
+alıcı adı ve e-posta girip <b>Ekle</b>’ye basmanız yeterli.</p>
+<ul>
+  <li><b>Önizle:</b> mailin o anki hâlini gösterir, gönderim yapmaz.</li>
+  <li><b>Aktif / Pasif:</b> tek tıkla durdurup başlatabilirsiniz.</li>
+</ul>
+
+<h3>Kullanıcı Yönetimi</h3>
+<p>Panel kullanıcıları burada açılır. Her kullanıcı için ayrı ayrı seçilir:</p>
+<ul>
+  <li><b>Rol</b> — personel veya admin</li>
+  <li><b>Görülebilecek sekmeler</b></li>
+  <li><b>Görülebilecek markalar</b> — hiçbiri seçilmezse tüm markalar görünür</li>
+</ul>
+<div class="not">
+  <b>Değişiklik ne zaman geçerli olur</b>
+  Kullanıcı çıkış yapıp yeniden girdiğinde. Oturum bilgisi girişte alınır.
+</div>
+</section>
+
+<!-- ══════════ 12 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">12</span>Otomatik e-postalar</h2>
+
+<h3>Adım bildirimi</h3>
+<p>Bir adım <b>Tamamlandı</b> yapıldığında, aynı karttaki <b>sıradaki adımın
+sorumlusuna</b> otomatik bilgilendirme maili gider: hangi kart, hangi görev ve
+varsa hedef tarih. Sorumlu atanmamışsa veya e-postası tanımlı değilse mail
+gönderilmez. RET durumu bildirim tetiklemez.</p>
+
+<h3>Haftalık marka özeti</h3>
+<p>Tanımlı alıcılara <b>her pazartesi 08:00’de</b> otomatik özet gider.
+Panelin açık olması gerekmez.</p>
+<table>
+  <tr><th style="width:34%">Bölüm</th><th>İçerik</th></tr>
+  <tr><td>Özet kutuları</td><td>Aktif kart · geçen hafta biten · RET · gecikmiş · bu hafta planlı</td></tr>
+  <tr><td>RET listesi</td><td>Geri dönen adımlar, kart bilgisiyle</td></tr>
+  <tr><td>Gecikmiş adımlar</td><td>Hedef tarihi geçmiş işler</td></tr>
+  <tr><td>Kartlar ve tüm adımlar</td><td>Her kartın tüm adımları: sıra, adım, iş türü, tarih, durum</td></tr>
+</table>
+<div class="not">
+  <b>Personel isimleri yer almaz</b>
+  Rapor müşteriye gittiği için sorumlu personel adları bilinçli olarak
+  çıkarılmıştır.
+</div>
+</section>
+
+<!-- ══════════ 13 ══════════ -->
+<section class="yeni-sayfa">
+<h2><span class="no">13</span>Kısayollar, sık sorulanlar ve sorun giderme</h2>
+
+<h3>Klavye kısayolları</h3>
+<table>
+  <tr><th style="width:30%">Ekran</th><th style="width:24%">Tuş</th><th>İşlev</th></tr>
+  <tr><td rowspan="2">Doküman not ekranı</td><td><code>←</code> <code>→</code></td><td>Önceki / sonraki sayfa</td></tr>
+  <tr><td><code>Esc</code></td><td>Kapat (not yazılıyorsa taslağı iptal eder)</td></tr>
+  <tr><td rowspan="4">Karşılaştırma büyütme</td><td><code>1</code> <code>2</code> <code>3</code></td><td>A / B / Farklar arası geçiş</td></tr>
+  <tr><td><code>+</code> <code>−</code></td><td>Yakınlaştır / uzaklaştır</td></tr>
+  <tr><td><code>0</code></td><td>Ekrana sığdır</td></tr>
+  <tr><td><code>Esc</code></td><td>Kapat</td></tr>
+</table>
+
+<h3>Sık sorulanlar</h3>
+<table>
+  <tr><th style="width:44%">Soru</th><th>Yanıt</th></tr>
+  <tr><td>Bir sekmeyi göremiyorum.</td><td>Hesabınıza tanımlı değil. Yöneticiden isteyin; değişiklik sonrası çıkış yapıp yeniden girin.</td></tr>
+  <tr><td>Günlük Durum’da işlerim görünmüyor.</td><td>Tarih filtresini temizleyin. Tarih seçili değilken tüm aktif işleriniz listelenir.</td></tr>
+  <tr><td>Yeni bir marka ekledim, listede yok.</td><td>Sayfayı yenileyin (Cmd/Ctrl + Shift + R).</td></tr>
+  <tr><td>Bildirim maili gitmedi.</td><td>Sıradaki adımda sorumlu atanmış mı ve o kişinin e-postası Veri Yönetimi’nde tanımlı mı, kontrol edin.</td></tr>
+  <tr><td>Kart adını değiştiremiyorum.</td><td>Bu işlem yalnızca yöneticide.</td></tr>
+  <tr><td>PDF açılmıyor / not ekranı boş.</td><td>Sayfayı yenileyin; PDF kütüphanesi yüklenememiş olabilir.</td></tr>
+  <tr><td>Yaptığım değişiklik kayboldu mu?</td><td>Panelde “kaydet” düğmesi çoğu yerde yoktur; değişiklikler anında kaydedilir. Sağ altta kırmızı bir uyarı çıkmadıysa kayıt başarılıdır.</td></tr>
+</table>
+
+<h3>İyi alışkanlıklar</h3>
+<ul>
+  <li>Adımlara <b>hedef tarih</b> girin — gecikme uyarıları ve haftalık özet buna dayanır.</li>
+  <li>Revize taleplerini sözlü bırakmayın; <b>doküman üzerine not</b> düşün, düzeltilince “çözüldü” işaretleyin.</li>
+  <li>Biten kartları <b>arşivleyin</b>; listeler ve raporlar temiz kalır.</li>
+  <li>Geri dönen işlerde durumu <b>RET</b> yapın; yalnızca “Bekliyor”a çekmeyin — RET raporlarda ayrı izlenir.</li>
+</ul>
+
+<div class="not" style="margin-top:20px">
+  <b>Sorun devam ediyorsa</b>
+  Ekran görüntüsü alın ve hangi sekmede, hangi işlemi yaparken olduğunu not
+  edin. Tarayıcıda <code>F12</code> → <b>Console</b> sekmesindeki kırmızı satır
+  varsa onu da ekleyin; sorunun kaynağını hızla gösterir.
+</div>
+</section>
+
+</body>
+</html>
