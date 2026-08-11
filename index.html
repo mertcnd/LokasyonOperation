@@ -3004,6 +3004,7 @@ function renderUrunKartlari(){
 
 // ── Card detail ────────────────────────────────────────────────────────────
 function kartDetayAc(id){
+  if(aktifKartId!==id)arsivliAdimGoster=false;   // yeni karta geçince arşiv bölümü kapalı başlar
   aktifKartId=id;
   const k=urunKartlari.find(x=>x.id===id);if(!k)return;
   document.getElementById('urun-liste-view').style.display='none';
@@ -3043,22 +3044,38 @@ function urunGeriDon(doRender=true){
 }
 
 // ── Steps render ───────────────────────────────────────────────────────────
+// Arşivlenmiş adımlar kart içinde varsayılan olarak gizlidir; "Arşivlenen
+// adımları gör" şeridiyle açılır. İlerleme ve süre hesapları yalnızca aktif
+// adımlardan yapılır (özet kutusu da öyle çalışıyor).
+let arsivliAdimGoster=false;
+function arsivliAdimToggle(){ arsivliAdimGoster=!arsivliAdimGoster; renderDetayAdimlar(); }
 function renderDetayAdimlar(){
   if(!aktifKartId)return;
-  const adimlar=urunAdimlar.filter(a=>a.kart_id===aktifKartId).sort((a,b)=>a.sira-b.sira);
+  const hepsi=urunAdimlar.filter(a=>a.kart_id===aktifKartId).sort((a,b)=>a.sira-b.sira);
+  const adimlar=hepsi.filter(a=>!a.arsivlendi);
+  const arsivli=hepsi.filter(a=>a.arsivlendi);
   const tam=adimlar.filter(a=>a.durum==='Tamamlandı').length;
   const top=adimlar.length;
   const pct=top>0?Math.round((tam/top)*100):0;
   document.getElementById('detay-progress-lbl').textContent=`${tam} / ${top} adım tamamlandı`;
   document.getElementById('detay-progress-bar').style.width=pct+'%';
   const cont=document.getElementById('detay-adimlar');if(!cont)return;
-  if(!adimlar.length){
+  const durumRenk={'Bekliyor':'#9e9e9e','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935'};
+  const bdgMap={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret'};
+  const arsivSeridi=()=>!arsivli.length?'':
+    `<div onclick="arsivliAdimToggle()" style="display:flex;align-items:center;gap:8px;cursor:pointer;
+      background:${arsivliAdimGoster?'#fff3e0':'#fafbfd'};border:1px solid ${arsivliAdimGoster?'#ffcc80':'#e2e8f0'};
+      border-radius:10px;padding:9px 14px;margin:${adimlar.length?'14px':'0'} 0 10px;font-size:12px;color:#8a6d3b">
+      <span style="font-size:14px">📦</span>
+      <span style="font-weight:700;color:#e65100">Arşivlenen adımlar (${arsivli.length})</span>
+      <span style="color:#999">— bu kartta daha önce arşivlenmiş adımlar var</span>
+      <span style="margin-left:auto;font-weight:700;color:#1565c0">${arsivliAdimGoster?'Gizle ▲':'Göster ▼'}</span>
+    </div>`;
+  if(!adimlar.length&&!arsivli.length){
     cont.innerHTML='<div class="card" style="text-align:center;color:#aaa;padding:30px;font-style:italic">Henüz adım eklenmedi. Aşağıdan adım ekleyin.</div>';
     return;
   }
-  const durumRenk={'Bekliyor':'#9e9e9e','Devam Ediyor':'#1565c0','Tamamlandı':'#2e7d32','RET':'#e53935'};
-  const bdgMap={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret'};
-  cont.innerHTML=adimlar.map(a=>{
+  const adimKarti=(a)=>{
     const col=durumRenk[a.durum]||'#9e9e9e';
     const bdg=bdgMap[a.durum]||'badge-bek';
     const ret=a.durum==='RET';   // RET: adım baştan aşağı kırmızı vurgulanır
@@ -3080,9 +3097,11 @@ function renderDetayAdimlar(){
           <div>İdeal: <strong>${a.sure||0} dk</strong></div>
           <div style="margin-top:3px">Fiili: <strong style="color:${fiiliColor}">${a.gercek_sure||0} dk</strong></div>
         </div>
-        <select onclick="event.stopPropagation()" onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid ${ret?'#e53935':'#ddd'};border-radius:6px;padding:5px 8px;font-size:11px;background:#fff;width:100%;color:${ret?'#c62828':'inherit'};font-weight:${ret?'700':'400'}">
+        ${a.arsivlendi
+          ? `<button onclick="event.stopPropagation();arsivdenCek('${a.id}')" title="Bu adımı arşivden çıkar" style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer;width:100%">↩ Geri Al</button>`
+          : `<select onclick="event.stopPropagation()" onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid ${ret?'#e53935':'#ddd'};border-radius:6px;padding:5px 8px;font-size:11px;background:#fff;width:100%;color:${ret?'#c62828':'inherit'};font-weight:${ret?'700':'400'}">
           ${['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
-        </select>
+        </select>`}
         <div style="display:flex;flex-direction:column;gap:1px" onclick="event.stopPropagation()">
           <button onclick="adimTasi('${a.id}',-1)" title="Yukarı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▲</button>
           <button onclick="adimTasi('${a.id}',1)" title="Aşağı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▼</button>
@@ -3132,7 +3151,11 @@ function renderDetayAdimlar(){
         <div style="display:flex;gap:8px"><button onclick="${a.arsivlendi?'arsivdenCek':'arsivGonder'}('${a.id}')" style="background:none;border:1px solid #ff8f00;color:#ff8f00;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">${a.arsivlendi?'↩ Arşivden Çek':'📦 Arşive Gönder'}</button><button onclick="adimSil('${a.id}')" style="background:none;border:1px solid #e53935;color:#e53935;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">🗑 Adımı Sil</button></div>
       </div>`:''}
     </div>`;
-  }).join('');
+  };
+  const bosMesaj='<div class="card" style="text-align:center;color:#aaa;padding:22px;font-style:italic">Bu kartta aktif adım yok — aşağıdan adım ekleyebilir veya arşivdekileri geri alabilirsiniz.</div>';
+  cont.innerHTML=(adimlar.length?adimlar.map(adimKarti).join(''):bosMesaj)
+    +arsivSeridi()
+    +(arsivliAdimGoster?`<div style="opacity:.72">${arsivli.map(adimKarti).join('')}</div>`:'');
   // Sıra seçimini güncelle (yeni adım nereye eklensin)
   const siraSel=document.getElementById('adim-sira-sec');
   if(siraSel){
