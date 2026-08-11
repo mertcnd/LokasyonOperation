@@ -688,8 +688,9 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <div id="detay-kart-durum-badge"></div>
           <button id="kart-ad-duzenle-btn" onclick="kartAdiDuzenle()" style="background:#1565c0;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">✏️ Adı Düzenle</button>
-          <button onclick="kartTamamla()" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">✔ Tamamla</button>
-          <button onclick="kartArsivle()" style="background:#ff8f00;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📦 Arşivle</button>
+          <button id="kart-aktif-btn" onclick="kartYenidenAktif()" style="background:#1565c0;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">↩ Yeniden Aktif Et</button>
+          <button id="kart-tamamla-btn" onclick="kartTamamla()" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">✔ Tamamla</button>
+          <button id="kart-arsivle-btn" onclick="kartArsivle()" style="background:#ff8f00;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">📦 Arşivle</button>
           <button id="kart-sil-btn" onclick="kartSil()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">🗑 Sil</button>
         </div>
       </div>
@@ -3017,6 +3018,7 @@ function kartDetayAc(id){
   }
   const durumBdg={Aktif:'badge-dev',Tamamlandı:'badge-tam',Arşivlendi:'badge-ipt'}[k.durum]||'badge-bek';
   document.getElementById('detay-kart-durum-badge').innerHTML=`<span class="badge ${durumBdg}">${k.durum}</span>`;
+  kartDurumDugmeleri(k.durum);
   renderDetayAdimlar();
   // populate adim dropdowns
   sel('adim-isturi',isTurleri.map(i=>i.ad),'Seçin...');
@@ -3189,6 +3191,38 @@ async function kartOlustur(){
     kartDetayAc(yeni.id); // adımları atamaya hazır şekilde aç
   }
   }finally{kartOlusturuluyor=false;}
+}
+// Kartın durumuna göre hangi düğmelerin görüneceği:
+// Aktif kart tamamlanabilir/arşivlenebilir, tamamlanmış veya arşivlenmiş kart
+// yeniden aktif edilebilir.
+function kartDurumDugmeleri(durum){
+  const g=(id,goster)=>{const el=document.getElementById(id); if(el)el.style.display=goster?'':'none'};
+  g('kart-aktif-btn',    durum!=='Aktif');
+  g('kart-tamamla-btn',  durum!=='Tamamlandı');
+  g('kart-arsivle-btn',  durum!=='Arşivlendi');
+}
+// Tamamlanan veya arşivlenen kartı işe geri döndürür.
+async function kartYenidenAktif(){
+  if(!aktifKartId)return;
+  const k=urunKartlari.find(x=>x.id===aktifKartId);if(!k)return;
+  if(k.durum==='Aktif'){sbToast('Bu kart zaten aktif.');return}
+  if(!confirm(`"${k.ad}" kartı yeniden aktif hâle getirilecek. Onaylıyor musunuz?`))return;
+  const eskiDurum=k.durum;
+  k.durum='Aktif';
+  kartDetayAc(aktifKartId);
+  const ok=await sbPatch('urun_kartlari','id',k.id,{durum:'Aktif'});
+  if(ok===false){k.durum=eskiDurum;kartDetayAc(aktifKartId);return}
+
+  // Kartın arşivlenmiş adımları varsa onlar da geri alınmadan iş listelerde görünmez
+  const arsivli=urunAdimlar.filter(a=>a.kart_id===k.id&&a.arsivlendi);
+  if(arsivli.length&&confirm(`Bu kartın ${arsivli.length} adımı da arşivde. Onlar da geri alınsın mı?`)){
+    arsivli.forEach(a=>a.arsivlendi=false);
+    await sbPatch('urun_adimlar','kart_id',k.id,{arsivlendi:false});
+    kartDetayAc(aktifKartId);
+    renderGorevler();
+  }
+  renderGorevler();
+  sbToast('✔ Kart yeniden aktif: '+k.ad);
 }
 async function kartTamamla(){
   if(!aktifKartId)return;
