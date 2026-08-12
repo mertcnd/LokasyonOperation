@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Operasyon Paneli — Kullanıcı Kılavuzu</title>
+<style>
+:root{
+  --lacivert:#1a237e; --lacivert-acik:#3949ab; --mavi:#1565c0;
+  --metin:#1f2430; --metin-2:#5b6472; --metin-3:#8a92a3;
+  --cizgi:#e2e8f0; --zemin:#f6f8fc; --beyaz:#fff;
+  --yesil:#2e7d32; --turuncu:#e65100; --kirmizi:#e53935;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --r:10px;
+}
+@page{ size:A4 landscape; margin:0; }
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; color:var(--metin);
+      font-size:9.6pt; line-height:1.5; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+.sayfa{ width:297mm; height:210mm; padding:13mm 15mm 11mm; position:relative;
+        page-break-after:always; break-after:page; overflow:hidden; background:var(--beyaz); }
+.sayfa:last-child{ page-break-after:auto; break-after:auto; }
+
+.ust{ display:flex; align-items:baseline; gap:var(--s3); border-bottom:2px solid var(--lacivert);
+      padding-bottom:var(--s2); margin-bottom:var(--s4); }
+.ust .no{ font-size:20pt; font-weight:800; color:#cfd5e6; line-height:1; }
+.ust h2{ font-size:15pt; font-weight:800; color:var(--lacivert); letter-spacing:-.2px; }
+.ust .sekme{ margin-left:auto; font-size:8pt; color:var(--metin-3); text-transform:uppercase; letter-spacing:1px; }
+
+.altbilgi{ position:absolute; left:15mm; right:15mm; bottom:6mm; display:flex; font-size:7.5pt;
+           color:var(--metin-3); border-top:1px solid var(--cizgi); padding-top:5px; }
+.altbilgi .sf{ margin-left:auto; font-variant-numeric:tabular-nums; }
+
+.iki{ display:grid; grid-template-columns:76mm 1fr; gap:var(--s5); }
+.dort{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s5) var(--s6); }
+.uc{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--s5); }
+
+h3{ font-size:10.5pt; font-weight:800; color:var(--lacivert); margin:var(--s4) 0 var(--s1); }
+h3:first-child{ margin-top:0; }
+p{ margin-bottom:var(--s2); }
+.lede{ font-size:10.5pt; line-height:1.5; color:var(--metin-2); margin-bottom:var(--s3); }
+ul{ list-style:none; }
+ul li{ position:relative; padding-left:13px; margin-bottom:5px; }
+ul li::before{ content:''; position:absolute; left:2px; top:7px; width:4px; height:4px;
+               border-radius:50%; background:var(--lacivert-acik); }
+code{ font-family:"SF Mono",Menlo,monospace; font-size:8pt; background:var(--zemin);
+      border:1px solid var(--cizgi); padding:1px 5px; border-radius:4px; }
+
+.ss{ position:relative; border:1px solid var(--cizgi); border-radius:var(--r);
+     overflow:hidden; background:var(--zemin); box-shadow:0 2px 14px rgba(26,35,126,.10); }
+.ss img{ display:block; width:100%; }
+.ss.kirp img{ position:absolute; top:0; left:0; width:100%; }
+.im{ position:absolute; width:17px; height:17px; border-radius:50%; background:var(--kirmizi);
+     color:#fff; font-size:8pt; font-weight:800; display:flex; align-items:center; justify-content:center;
+     box-shadow:0 0 0 2.5px #fff, 0 2px 6px rgba(0,0,0,.35); }
+.ssalt{ font-size:7.5pt; color:var(--metin-3); margin-top:5px; text-align:right; }
+
+.anahtar div{ position:relative; padding-left:24px; margin-bottom:7px; font-size:9pt; }
+.anahtar div .n{ position:absolute; left:0; top:1px; width:16px; height:16px; border-radius:50%;
+  background:var(--kirmizi); color:#fff; font-size:7.5pt; font-weight:800;
+  display:flex; align-items:center; justify-content:center; }
+
+.kutu{ border-radius:var(--r); padding:var(--s3); font-size:8.8pt; line-height:1.45; }
+.kutu > b:first-child{ display:block; margin-bottom:3px; }
+.k-bilgi{ background:var(--zemin); border-left:3px solid var(--mavi); }
+.k-uyari{ background:#fff5f5; border-left:3px solid var(--kirmizi); }
+.k-ipucu{ background:#f2faf3; border-left:3px solid var(--yesil); }
+
+table{ width:100%; border-collapse:collapse; font-size:8.8pt; }
+th{ text-align:left; font-size:7.5pt; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--metin-3); padding:5px 7px; border-bottom:1.5px solid var(--cizgi); }
+td{ padding:5px 7px; border-bottom:1px solid #f0f3f8; vertical-align:top; }
+tr:last-child td{ border-bottom:none; }
+
+.rozet{ display:inline-block; border-radius:10px; padding:1px 8px; font-size:7.8pt; font-weight:700; }
+.r-bek{background:#fff3e0;color:#e65100} .r-dev{background:#e3f2fd;color:#1565c0}
+.r-tam{background:#e8f5e9;color:#2e7d32} .r-ret{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
+
+.adim{ counter-reset:ad; }
+.adim div{ counter-increment:ad; position:relative; padding-left:23px; margin-bottom:6px; }
+.adim div::before{ content:counter(ad); position:absolute; left:0; top:1px; width:16px; height:16px;
+  border-radius:50%; background:#fff; border:1.5px solid var(--lacivert-acik); color:var(--lacivert);
+  font-size:7.5pt; font-weight:800; display:flex; align-items:center; justify-content:center; }
+
+.akis{ display:flex; align-items:center; gap:6px; }
+.akis .k{ flex:1; border:1px solid #d7dded; border-radius:8px; padding:8px 6px; text-align:center;
+          background:#fbfcff; font-size:7.8pt; color:var(--metin-2); }
+.akis .k b{ display:block; font-size:9pt; color:var(--lacivert); }
+.akis .o{ color:#b9c0d0; font-size:11pt; }
+
+.lej{ display:flex; flex-wrap:wrap; gap:5px; }
+.lej span{ font-size:7.8pt; padding:2px 8px; border-radius:10px; border:1px solid var(--cizgi); background:#fff; }
+
+.kapak{ background:var(--lacivert); color:#fff; display:flex; }
+.kapak .sol{ width:150mm; padding:28mm 0 0 20mm; }
+.kapak .marka{ font-size:9pt; letter-spacing:4px; opacity:.65; text-transform:uppercase; }
+.kapak h1{ font-size:40pt; font-weight:800; line-height:1.02; letter-spacing:-1.5px; margin-top:14px; }
+.kapak .alt{ font-size:15pt; opacity:.82; margin-top:8px; font-weight:500; }
+.kapak .cz{ width:70px; height:4px; background:#fff; opacity:.5; margin:22px 0; border-radius:2px; }
+.kapak .meta{ font-size:9pt; opacity:.75; line-height:2; }
+.kapak .sag{ flex:1; position:relative; }
+.kapak .kart{ position:absolute; border-radius:8px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.18); }
+.kapak .kart img{ display:block; width:100%; }
+.kapak .k1{ top:26mm; left:-30mm; width:130mm; }
+.kapak .k2{ top:104mm; left:8mm; width:112mm; height:44mm; }
+.kapak .serit{ position:absolute; bottom:0; left:0; right:0; height:14mm; background:rgba(0,0,0,.22);
+  display:flex; align-items:center; padding:0 20mm; font-size:8.5pt; opacity:.85; }
+</style>
+</head>
+<body>
+
+<!-- 1 KAPAK -->
+<div class="sayfa kapak">
+  <div class="sol">
+    <div class="marka">Lokasyon İstanbul</div>
+    <h1>Operasyon<br>Paneli</h1>
+    <div class="alt">Kullanıcı Kılavuzu</div>
+    <div class="cz"></div>
+    <div class="meta">
+      Sürüm: Ağustos 2026<br>
+      lokasyonpanel.up.railway.app<br>
+      Günlük Durum · Görevler (To Do) · Ürün Kartları
+    </div>
+  </div>
+  <div class="sag">
+    <div class="kart k1"><img src="gorseller/p-gunluk.png" alt=""></div>
+    <div class="kart k2"><img src="gorseller/ss-dokuman.png" alt=""></div>
+  </div>
+  <div class="serit">Ekran görüntüleri panelin canlı sürümünden, kullanıcı hesabıyla alınmıştır.</div>
+</div>
+
+<!-- 2 BAŞLARKEN -->
+<div class="sayfa">
+  <div class="ust"><div class="no">01</div><h2>Başlarken</h2><div class="sekme">Genel</div></div>
+  <div class="dort">
+    <div>
+      <p class="lede">Panele tarayıcıdan <b>lokasyonpanel.up.railway.app</b> adresinden girilir.
+      Kullanıcı adı ve şifreniz size iletilir. Giriş yaptıktan sonra oturumunuz açık kalır; başka bir
+      bilgisayarda çalışacaksanız yeniden giriş yaparsınız.</p>
+
+      <h3>Üç sekmeniz var</h3>
+      <table>
+        <tr><th style="width:38%">Sekme</th><th>Ne için</th></tr>
+        <tr><td><b>Günlük Durum</b></td><td>Size atanmış işler. Günlük takip ve durum güncelleme burada.</td></tr>
+        <tr><td><b>Görevler (To Do)</b></td><td>Kişisel not defteriniz. İşle ilgili kendi hatırlatmalarınız.</td></tr>
+        <tr><td><b>Ürün Kartları</b></td><td>İşin kendisi: kartlar, adımlar, dokümanlar, revize notları.</td></tr>
+      </table>
+
+      <h3>İşin akışı</h3>
+      <div class="akis" style="margin-top:8px">
+        <div class="k"><b>Kart</b>bir ürün / iş</div><div class="o">→</div>
+        <div class="k"><b>Adımlar</b>Preflight, Repro, GMG…</div><div class="o">→</div>
+        <div class="k"><b>Durum</b>Bekliyor → Tamamlandı</div>
+      </div>
+    </div>
+    <div>
+      <div class="kutu k-bilgi">
+        <b>Kaydet düğmesi aramayın</b>
+        Panelde çoğu işlem <b>anında kaydedilir</b>: durum değiştirmek, tarih atamak, not yazmak,
+        süre tutmak. Ekranın sağ altında kırmızı bir uyarı çıkmadıysa kayıt tamamdır.
+      </div>
+
+      <div class="kutu k-ipucu" style="margin-top:12px">
+        <b>Size e-posta gelir</b>
+        Bir iş adımı tamamlandığında, aynı karttaki <b>sıradaki adım size atanmışsa</b> otomatik
+        bilgilendirme maili alırsınız: hangi kart, hangi görev, varsa hedef tarih. Yani sıranın size
+        geldiğini takip etmek için birini beklemenize gerek yok.
+      </div>
+
+      <div class="kutu k-uyari" style="margin-top:12px">
+        <b>Panel ortak kullanılıyor</b>
+        Aynı kart üzerinde başka arkadaşlarınız da çalışıyor olabilir. Bir ekranı uzun süre açık
+        bıraktıysanız, işlem yapmadan önce sayfayı yenileyin (<code>Cmd/Ctrl + Shift + R</code>) —
+        böylece en güncel hâli görürsünüz.
+      </div>
+
+      <h3>Göremediğiniz bir şey varsa</h3>
+      <p>Bu kılavuz üç sekme üzerinden anlatır. Ekranınızda bunlardan biri görünmüyorsa ya da bir
+      markanın işlerini göremiyorsanız, hesabınıza o yetki tanımlanmamış demektir; yöneticinize
+      bildirin. Yetki tanımlandıktan sonra <b>çıkış yapıp yeniden girmeniz</b> gerekir.</p>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">2</span></div>
+</div>
+
+<!-- 3 GÜNLÜK DURUM -->
+<div class="sayfa">
+  <div class="ust"><div class="no">02</div><h2>Günlük Durum — günün işleri</h2><div class="sekme">Günlük Durum</div></div>
+  <div class="iki">
+    <div>
+      <p class="lede">Açılış ekranınız. <b>Size atanmış tüm aktif işler</b> burada listelenir; başkasının
+      işleri görünmez.</p>
+      <div class="anahtar">
+        <div><span class="n">1</span><b>Gecikme bandı.</b> Tarihi geçmiş ve 3 gün içinde dolacak adımlarınız.
+          İşin adına tıklayınca doğrudan ilgili karta gidersiniz.</div>
+        <div><span class="n">2</span><b>Filtreler.</b> Tarih, marka ve durum. <b>Tarih seçmediğiniz sürece
+          her şey görünür</b> — geçmişe sarkan işler ve henüz tarihi olmayan adımlar dâhil.</div>
+        <div><span class="n">3</span><b>Marka rengi.</b> Satırın solundaki şerit ve kart adının yanındaki
+          nokta markayı gösterir; işler birbirine karışmaz.</div>
+        <div><span class="n">4</span><b>Durum ve işlem.</b> Rozet işin hâlini gösterir; yanındaki listeden
+          durumu değiştirirsiniz. 📦 düğmesi adımı arşive gönderir.</div>
+      </div>
+      <div class="lej" style="margin-top:10px">
+        <span><span class="rozet r-bek">Bekliyor</span> başlanmadı</span>
+        <span><span class="rozet r-dev">Devam Ediyor</span> üzerinde çalışılıyor</span>
+        <span><span class="rozet r-tam">Tamamlandı</span> bitti</span>
+        <span><span class="rozet r-ret">RET</span> iş geri döndü</span>
+      </div>
+      <div class="kutu k-ipucu" style="margin-top:12px">
+        <b>Günlük alışkanlık</b>
+        Güne bu ekranla başlayın: kırmızı bandı okuyun, işe başladığınızda durumu
+        <b>Devam Ediyor</b>, bitirdiğinizde <b>Tamamlandı</b> yapın. Bu iki hareket, sıradaki kişinin
+        haberdar olmasını sağlar.
+      </div>
+    </div>
+    <div>
+      <div class="ss">
+        <img src="gorseller/p-gunluk.png" alt="Günlük Durum">
+        <div class="im" style="left:2.5%; top:17.5%">1</div>
+        <div class="im" style="left:2.5%; top:34%">2</div>
+        <div class="im" style="left:11%;  top:53%">3</div>
+        <div class="im" style="left:75%;  top:53%">4</div>
+      </div>
+      <div class="ssalt">Günlük Durum · kullanıcı görünümü</div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">3</span></div>
+</div>
+
+<!-- 4 ÜRÜN KARTLARI -->
+<div class="sayfa">
+  <div class="ust"><div class="no">03</div><h2>Ürün Kartları — liste</h2><div class="sekme">Ürün Kartları</div></div>
+  <div class="iki">
+    <div>
+      <p class="lede">Her ürün bir <b>karttır</b>. Kart kapağı, açmadan durumu anlamanızı sağlar.</p>
+      <h3>Kapakta ne görürsünüz</h3>
+      <ul>
+        <li><b>Sol kenar rengi ve rozet</b> — markanın rengi</li>
+        <li><b>LK kodu</b> — tıklayınca klasör adını panoya kopyalar</li>
+        <li><b>İlerleme çubuğu</b> — kaç adımın tamamlandığı</li>
+        <li><b>Alt satır</b> — sırada bekleyen adım; iş geri döndüyse kırmızı <b>⛔ RET</b> uyarısı</li>
+      </ul>
+      <h3>Yeni kart açmak</h3>
+      <div class="adim">
+        <div>Sağ üstten <b>+ Yeni Ürün Kartı</b>.</div>
+        <div>Marka, ürün adı ve açan kişiyi girin; kod (LK0001…) otomatik verilir.</div>
+        <div>Varsa hazır bir <b>iş akışı şablonu</b> seçin — adımlar tek seferde oluşur.</div>
+      </div>
+      <div class="kutu k-bilgi" style="margin-top:10px">
+        <b>Aramak için</b>
+        Üstteki kutuya kart adının bir parçasını ya da <code>LK0024</code> gibi kodu yazın.
+        Marka ve duruma göre de süzebilirsiniz.
+      </div>
+    </div>
+    <div>
+      <div class="ss"><img src="gorseller/p-urun.png" alt="Ürün kartları listesi"></div>
+      <div class="ssalt">Ürün Kartları · marka renkleriyle</div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">4</span></div>
+</div>
+
+<!-- 5 ADIMLAR -->
+<div class="sayfa">
+  <div class="ust"><div class="no">04</div><h2>Adımlar, süre ve RET</h2><div class="sekme">Ürün Kartları</div></div>
+  <div class="iki">
+    <div>
+      <p class="lede">Kartın altındaki sıralı adımlar işin omurgasıdır. Günlük listeniz de bu adımlardan
+      oluşur.</p>
+      <div class="anahtar">
+        <div><span class="n">1</span><b>Tamamlanan adım.</b> Yeşil ✓, adı üstü çizili.</div>
+        <div><span class="n">2</span><b>RET.</b> İş geri döndüğünde bu durumu seçin; adım baştan aşağı
+          kırmızıya döner ve kart kapağında öne çıkar.</div>
+        <div><span class="n">3</span><b>İdeal / Fiili süre.</b> İdeal, iş türünden otomatik gelir. Fiili,
+          sizin tuttuğunuz süredir; ideali aşarsa kırmızı yazılır.</div>
+        <div><span class="n">4</span><b>Dokümanlar.</b> PDF ve görsellerde <b>📝 Notlar</b> düğmesi ve
+          açık not sayısı görünür.</div>
+      </div>
+      <h3>Adım detayı</h3>
+      <p>Adıma tıklayın: sorumlu, hedef tarih, zorluk, <b>süre sayacı</b> (▶ Başlat / ⏸ Durdur) ve adıma
+      özel notlar açılır. Sıralamayı sağdaki ▲▼ ile değiştirirsiniz.</p>
+      <div class="kutu k-uyari" style="margin-top:10px">
+        <b>RET’i “Bekliyor”a çekmeyin</b>
+        Geri dönen işte durumu <b>RET</b> yapın. “Bekliyor” bilgiyi siler; RET ise işin geri döndüğünü
+        kartta ve raporlarda görünür kılar. RET olan bir adım tamamlanmış sayılmaz ve sonraki kişiye
+        bildirim göndermez.
+      </div>
+      <div class="kutu k-bilgi" style="margin-top:10px">
+        <b>Arşivlenen adımlar</b>
+        Bir adımı arşive gönderdiyseniz kart içinde gizlenir; listenin altındaki
+        <b>📦 Arşivlenen adımlar (N)</b> şeridinden açıp <b>↩ Geri Al</b> ile geri getirebilirsiniz.
+      </div>
+    </div>
+    <div>
+      <div class="ss">
+        <img src="gorseller/p-kart.png" alt="Kart detayı">
+        <div class="im" style="left:2.8%; top:21%">1</div>
+        <div class="im" style="left:2.8%; top:36.5%">2</div>
+        <div class="im" style="left:78%;  top:36.5%">3</div>
+        <div class="im" style="left:82%;  top:90.5%">4</div>
+      </div>
+      <div class="ssalt">Kart detayı · adımlar ve dokümanlar</div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">5</span></div>
+</div>
+
+<!-- 6 DOKÜMAN NOTLARI -->
+<div class="sayfa">
+  <div class="ust"><div class="no">05</div><h2>PDF üzerine not ve işaretleme</h2><div class="sekme">Ürün Kartları</div></div>
+  <div class="iki">
+    <div>
+      <p class="lede">Revize talebini sözlü bırakmayın: dosyayı panelde açın, düzeltilecek yeri
+      işaretleyin, düzeltilince kapatın.</p>
+      <div class="anahtar">
+        <div><span class="n">1</span><b>Araçlar.</b> 📍 İğne (tek nokta) · ▭ Kutu (alan) · ➜ Ok (yön) ·
+          🖍 Vurgu (metin).</div>
+        <div><span class="n">2</span><b>İşaretler.</b> Belgeye sabitlenir ve numaralandırılır.</div>
+        <div><span class="n">3</span><b>Not listesi.</b> Nota tıklayınca ilgili sayfaya gider.</div>
+        <div><span class="n">4</span><b>Çözüldü.</b> ✔ ile kapatılır; işaret yeşile döner ve listeden
+          düşer. “Çözülenleri göster” ile geri gelir.</div>
+      </div>
+      <h3>Nasıl</h3>
+      <div class="adim">
+        <div>Doküman satırındaki <b>📝 Notlar</b>’a basın.</div>
+        <div>Üstten bir araç seçin, belgeye tıklayın veya sürükleyin.</div>
+        <div>Sağdaki kutuya notu yazıp <b>Kaydet</b>’e basın.</div>
+      </div>
+      <div class="kutu k-ipucu" style="margin-top:10px">
+        <b>Kim ne yapabilir</b>
+        Yazdığınız notu yalnızca siz silebilirsiniz. Bir düzeltmeyi siz yaptıysanız, başkasının notunu
+        <b>çözüldü</b> işaretleyebilirsiniz — maddeyi kapatan, işi yapan kişidir.
+      </div>
+      <div class="kutu k-bilgi" style="margin-top:10px">
+        <b>Not yeri kaymaz</b>
+        İşaretler sayfaya göre oransal saklanır; kim hangi ekranda açarsa açsın not aynı yerde durur.
+        Kısayollar: <code>←</code> <code>→</code> sayfa, <code>Esc</code> kapat.
+      </div>
+    </div>
+    <div>
+      <div class="ss kirp" style="height:74mm">
+        <div style="position:relative;width:100%;padding-top:62.5%">
+          <img src="gorseller/ss-dokuman.png" alt="Doküman not ekranı">
+          <div class="im" style="left:31%;   top:2.5%">1</div>
+          <div class="im" style="left:59.5%; top:43%">2</div>
+          <div class="im" style="left:79%;   top:13%">3</div>
+          <div class="im" style="left:94.5%; top:12.5%">4</div>
+        </div>
+      </div>
+      <div class="ssalt">Doküman not ekranı · iki açık vurgu notu</div>
+      <div class="kutu k-uyari" style="margin-top:14px">
+        <b>Dosya yüklerken</b>
+        Karta yüklenen dosyayı ekipteki herkes görebilir. Yanlış sürümü yüklerseniz silip doğrusunu
+        yükleyin; dosya adında sürüm belirtmek (örn. <code>_rev2</code>) karışıklığı önler.
+      </div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">6</span></div>
+</div>
+
+<!-- 7 KARŞILAŞTIRMA -->
+<div class="sayfa">
+  <div class="ust"><div class="no">06</div><h2>Dosya karşılaştırma — revize kontrolü</h2><div class="sekme">Ürün Kartları</div></div>
+  <div class="dort">
+    <div>
+      <p class="lede">Revize gelen dosyada neyin değiştiğini gözle aramak yerine panele buldurun.
+      Kart detayındaki <b>🔍 Dosya Karşılaştır</b> iki dosyayı piksel piksel karşılaştırır.</p>
+      <div class="adim">
+        <div>Dosya A (orijinal) ve Dosya B (revize) seçin — PDF, JPG, PNG.</div>
+        <div>Çok sayfalı PDF ise sayfa numarasını girin.</div>
+        <div><b>Karşılaştır</b>’a basın: A, B ve farkların kırmızı işaretlendiği üçüncü görsel çıkar.</div>
+        <div>Görsele tıklayın — tam ekran inceleme açılır.</div>
+      </div>
+      <div class="kutu k-bilgi" style="margin-top:14px">
+        <b>Dosyalarınız hiçbir yere yüklenmez</b>
+        Karşılaştırma tamamen kendi tarayıcınızda yapılır; seçtiğiniz dosyalar panele veya sunucuya
+        gönderilmez.
+      </div>
+    </div>
+    <div>
+      <h3>Tam ekran incelemede</h3>
+      <div class="akis" style="margin:10px 0 16px">
+        <div class="k"><b>1</b>A · Orijinal</div><div class="o">↔</div>
+        <div class="k"><b>2</b>B · Revize</div><div class="o">↔</div>
+        <div class="k"><b>3</b>Farklar</div>
+      </div>
+      <p>Farkın olduğu yere yakınlaşın, sonra <code>1</code> ve <code>2</code> tuşlarıyla A ile B
+      arasında gidip gelin: <b>yakınlaştırma ve konum korunur</b>, değişiklik gözünüze çarpar.
+      İki dosyayı yan yana açıp aramaktan çok daha hızlıdır.</p>
+      <table style="margin-top:12px">
+        <tr><th style="width:34%">Tuş / düğme</th><th>İşlev</th></tr>
+        <tr><td><code>1</code> <code>2</code> <code>3</code></td><td>A / B / Farklar arası geçiş</td></tr>
+        <tr><td>Fare tekerleği</td><td>İmlecin olduğu noktaya yakınlaşır</td></tr>
+        <tr><td>Sürükleme</td><td>Görüntüde gezinme</td></tr>
+        <tr><td><code>1:1</code></td><td>Gerçek piksel boyutu</td></tr>
+        <tr><td><code>0</code> / ⤢</td><td>Ekrana sığdır</td></tr>
+        <tr><td><code>Esc</code></td><td>Kapat</td></tr>
+      </table>
+      <div class="kutu k-ipucu" style="margin-top:12px">
+        <b>Ne zaman işinize yarar</b>
+        Matbaadan dönen revize, müşteriden gelen yeni sürüm, ya da “sadece metin değişti” denen
+        dosyada gerçekten başka bir şeyin değişip değişmediğini görmek için.
+      </div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">7</span></div>
+</div>
+
+<!-- 8 TO-DO -->
+<div class="sayfa">
+  <div class="ust"><div class="no">07</div><h2>Görevler (To Do) — kişisel notlarınız</h2><div class="sekme">Görevler</div></div>
+  <div class="iki">
+    <div>
+      <p class="lede">Ürün kartlarından bağımsız, kendi hatırlatmalarınız için. “Müşteriye dosya gönder”,
+      “matbaayı ara” gibi işler buraya.</p>
+      <div class="anahtar">
+        <div><span class="n">1</span><b>Not oluşturma.</b> Başlık zorunlu; açıklama, hedef tarih ve
+          isterseniz bir kişiye atama isteğe bağlı.</div>
+        <div><span class="n">2</span><b>Filtreler.</b> Aktif / Tamamlanan / Tümü ve tarih aralığı.</div>
+        <div><span class="n">3</span><b>Tamamlama.</b> Soldaki kutuyu işaretleyin; not üstü çizili olur.</div>
+      </div>
+      <div class="kutu k-ipucu" style="margin-top:12px">
+        <b>Notlarınız kişiseldir</b>
+        Listenizde yalnızca <b>sizin yazdığınız</b> ve <b>size atanan</b> notlar görünür.
+        Yazdığınız notu yalnızca siz silebilirsiniz; size atanmış bir notu tamamlayabilirsiniz ama
+        silemezsiniz.
+      </div>
+      <div class="kutu k-bilgi" style="margin-top:10px">
+        <b>Sekmedeki kırmızı rozet</b>
+        Tamamlanmamış not sayınızı gösterir. Sıfırlandığında rozet kaybolur.
+      </div>
+    </div>
+    <div>
+      <div class="ss">
+        <img src="gorseller/p-todo.png" alt="Görevler (To Do)">
+        <div class="im" style="left:4%;   top:16%">1</div>
+        <div class="im" style="left:89.5%; top:46.5%">2</div>
+        <div class="im" style="left:4%;   top:57%">3</div>
+      </div>
+      <div class="ssalt">Görevler (To Do) · kişisel liste</div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu</span><span class="sf">8</span></div>
+</div>
+
+<!-- 9 SSS -->
+<div class="sayfa">
+  <div class="ust"><div class="no">08</div><h2>Sık sorulanlar ve iyi alışkanlıklar</h2><div class="sekme">Genel</div></div>
+  <div class="dort">
+    <div>
+      <table>
+        <tr><th style="width:46%">Soru</th><th>Yanıt</th></tr>
+        <tr><td>Günlük Durum’da işlerim görünmüyor</td><td>Tarih filtrelerini temizleyin; boşken size atanmış tüm aktif işler listelenir.</td></tr>
+        <tr><td>Bir iş bana atanmış ama listede yok</td><td>Adımın durumu Tamamlandı olabilir ya da adım arşivlenmiştir. Kartı açıp kontrol edin.</td></tr>
+        <tr><td>Değişikliğim kaydoldu mu?</td><td>Kaydet düğmesi yoktur, anında kaydedilir. Kırmızı uyarı çıkmadıysa kayıtlıdır.</td></tr>
+        <tr><td>PDF açılmıyor / not ekranı boş</td><td>Sayfayı yenileyin. Dosya büyükse ilk açılış birkaç saniye sürebilir.</td></tr>
+        <tr><td>Yanlış dosyayı yükledim</td><td>Doküman satırındaki 🗑 ile silip doğrusunu yükleyin.</td></tr>
+        <tr><td>Yeni marka listede yok</td><td>Sayfayı yenileyin (Cmd/Ctrl + Shift + R).</td></tr>
+        <tr><td>Bir sekmeyi göremiyorum</td><td>Hesabınıza tanımlı değil. Yöneticinize bildirin; sonra çıkış yapıp yeniden girin.</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>İyi alışkanlıklar</h3>
+      <ul>
+        <li><b>Durumu güncel tutun.</b> İşe başlarken Devam Ediyor, bitirince Tamamlandı — sıradaki kişi bunun üzerine hareket ediyor.</li>
+        <li><b>Adımlara hedef tarih girin.</b> Gecikme uyarıları buna göre çalışır.</li>
+        <li><b>Süre sayacını kullanın.</b> Fiili süre birikmezse iş yükü tahminleri kör kalır.</li>
+        <li><b>Revizeyi belgeye yazın.</b> Sözlü talep kaybolur; doküman notu kalır ve düzeltilince kapatılır.</li>
+        <li><b>Geri dönen işte RET kullanın.</b> Bilgiyi silmez, işin geri döndüğünü görünür kılar.</li>
+        <li><b>Biten adımı arşivleyin.</b> Listeniz kısalır, gecikme uyarıları anlamlı kalır.</li>
+      </ul>
+      <h3>Kısayollar</h3>
+      <table>
+        <tr><th style="width:36%">Ekran</th><th>Tuşlar</th></tr>
+        <tr><td>Doküman notu</td><td><code>←</code> <code>→</code> sayfa · <code>Esc</code> kapat</td></tr>
+        <tr><td>Dosya karşılaştırma</td><td><code>1</code> <code>2</code> <code>3</code> geçiş ·
+            <code>+</code> <code>−</code> zoom · <code>0</code> sığdır · <code>Esc</code> kapat</td></tr>
+      </table>
+      <div class="kutu k-bilgi" style="margin-top:12px">
+        <b>Takıldığınızda</b>
+        Ekran görüntüsü alın; hangi sekmede, hangi işlemi yaparken olduğunu yazın. Bu ikisi sorunun
+        kaynağını çok hızlı gösterir.
+      </div>
+    </div>
+  </div>
+  <div class="altbilgi"><span>Operasyon Paneli · Kullanıcı Kılavuzu · Ağustos 2026</span><span class="sf">9</span></div>
+</div>
+
+</body>
+</html>
