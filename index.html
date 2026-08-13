@@ -964,13 +964,6 @@ function kullaniciMarkalari(u){
 }
 // Kısıt tanımlı mı? (boş dizi = kısıt yok = tüm markalar)
 function markaKisitliMi(u){ return u&&u.rol!=='admin'&&kullaniciMarkalari(u).length>0; }
-// Aktif kullanıcının görebileceği markalar. Admin her zaman hepsini görür.
-function gorunurMarkalar(tumMarkalar){
-  const hepsi=tumMarkalar||markalar;
-  if(!markaKisitliMi(aktifKullanici))return hepsi;
-  const izinli=kullaniciMarkalari(aktifKullanici);
-  return hepsi.filter(m=>izinli.includes(m));
-}
 
 async function sifreHashle(sifre){
   const enc=new TextEncoder();
@@ -1004,12 +997,6 @@ async function girisYap(){
   const session={id:user.id,kullanici_adi:user.kullanici_adi,ad_soyad:user.ad_soyad||user.kullanici_adi,personel_id:user.personel_id||'',rol:user.rol,sekmeler:Array.isArray(user.sekmeler)?user.sekmeler:JSON.parse(user.sekmeler||'[]'),markalar:kullaniciMarkalari(user)};
   oturumKaydet(session);
   // Sayfayi yenile — oturumKontrol session'i okuyup init()'i cagirır
-  location.reload();
-}
-
-function cikisYap(){
-  oturumSil();
-  aktifKullanici=null;
   location.reload();
 }
 
@@ -1488,19 +1475,6 @@ function refreshAllDropdowns(){
 }
 
 // ─── GÜNLÜK DURUM ─────────────────────────────────────────────────────────────
-function filteredGorevler(){
-  const fs=document.getElementById('g-fstart').value,fe=document.getElementById('g-fend').value;
-  const fp=document.getElementById('g-fpersonel').value,fm=document.getElementById('g-fmarka').value,fd=document.getElementById('g-fdurum').value;
-  return gorevler.filter(g=>{
-    if(g.arsivlendi)return false;
-    if(fp&&g.personel!==fp)return false;
-    if(fm&&g.marka!==fm)return false;
-    if(fd&&g.durum!==fd)return false;
-    if(fs&&g.tarih<fs)return false;
-    if(fe&&g.tarih>fe)return false;
-    return true;
-  });
-}
 function benimPersonelAdim(){
   if(!aktifKullanici)return null;
   if(aktifKullanici.rol==='admin')return null;
@@ -1588,11 +1562,6 @@ async function gorevDurumDegistir(id,val){
   g.durum=val;
   renderGorevler();
   await sbPatch('gorevler','id',id,{durum:val});
-}
-function autoFillSure(){
-  const itAd=document.getElementById('yeni-isturi').value,zorluk=document.getElementById('yeni-zorluk').value.toLowerCase();
-  const it=isTurleri.find(i=>i.ad===itAd);
-  if(it)document.getElementById('yeni-sure').value=it[zorluk]||'';
 }
 async function gorevOlustur(){
   const ad=document.getElementById('yeni-ad').value.trim(),personel=document.getElementById('yeni-personel').value;
@@ -2518,10 +2487,6 @@ function kapasiteHesapla(perList,fs,fe){
     .filter(i=>perList.includes(i.personel)&&(!fs||i.tarih>=fs)&&(!fe||i.tarih<=fe))
     .reduce((s,i)=>s+Math.min(izinDkCevir(i.sure),gunlukMesaiDk(i.tarih)),0);
   return Math.max(0,baseKap-izinDk);
-}
-function kapHesapla(fs,fe,fp){
-  // fp = single personel filter or '' for all
-  return kapasiteHesapla(fp?[fp]:personeller.map(p=>p.ad),fs,fe);
 }
 function kapHesaplaRapor(fs,fe){
   // For raporlama: uses rPersonelSec multi-select
