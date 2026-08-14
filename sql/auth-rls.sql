@@ -1,18 +1,25 @@
 -- ============================================================================
---  AUTH GEÇİŞİ — satır seviyesi güvenlik (RLS)
+--  AUTH GEÇİŞİ — satır seviyesi güvenlik (RLS)      ✅ UYGULANDI: 14.08.2026
 -- ============================================================================
---  Bu dosya GEÇİŞ GÜNÜ uygulanır. Uygulandığı anda panelin eski (publishable
---  key ile çalışan) sürümü veri okuyamaz hale gelir; bu yüzden sıralama önemli:
+--  Bu dosya artık tarihsel kayıt ve geri alma kaynağıdır. Uygulanan sıra:
 --
---    1. Her kullanıcı için Auth hesabı açılır ve kullanicilar.auth_uid doldurulur
---       (Veri Yönetimi → Kullanıcı Yönetimi → "Auth hesabı aç")
---    2. Bu dosya uygulanır
---    3. index.html içindeki AUTH_MODU sabiti true yapılıp panel yayına alınır
+--    1. 9 kullanıcı için Auth hesabı açıldı, kullanicilar.auth_uid dolduruldu
+--    2. Geçici "köprü" politikası eklendi (authenticated → tam erişim)
+--    3. AUTH_MODU = true push edildi — panel Auth'a geçti, veri akmaya devam etti
+--    4. Bu dosyadaki politikalar uygulandı; public_all ve köprü kaldırıldı
 --
---  2 ile 3 arasında panel çalışmaz (birkaç dakika). Mesai dışında yapılmalı.
+--  Köprü adımı sayesinde kesinti olmadı. Köprüsüz sırada (önce politika, sonra
+--  deploy) panel birkaç dakika veri okuyamazdı: public_all yalnızca anon
+--  rolüne açıktı, Auth'a geçen kullanıcı authenticated olarak geliyor.
 --
---  Geri alma: en alttaki "GERİ ALMA" bölümü public_all politikalarını geri
---  getirir ve AUTH_MODU=false ile eski sürüme dönülebilir.
+--  ── Yol boyunca çıkan iki tuzak ───────────────────────────────────────────
+--  · auth.users satırları SQL ile açılırken confirmation_token, recovery_token,
+--    email_change, email_change_token_new/current, phone_change,
+--    phone_change_token, reauthentication_token alanları NULL bırakılmamalı.
+--    Sütunlar NULL kabul ediyor ama GoTrue bunları metin olarak okuduğu için
+--    giriş "Database error querying schema" hatası veriyor. Boş metin ('') yaz.
+--  · kullanicilar.sifre_hash NOT NULL idi; Auth'ta şifre saklamadığımız için
+--    kısıt kaldırıldı ve mevcut hash'ler temizlendi.
 -- ============================================================================
 
 -- ─── 1. YARDIMCI FONKSİYONLAR ───────────────────────────────────────────────
