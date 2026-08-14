@@ -66,6 +66,13 @@ input:focus,select:focus,textarea:focus{border-color:#1565c0;box-shadow:0 0 0 2p
 .badge-tam{background:#e8f5e9;color:#2e7d32}
 .badge-ipt{background:#fce4ec;color:#880e4f}
 .badge-ret{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
+/* Müşteri raporu — dönem seçim düğmeleri */
+.mr-btn{background:#f0f2f8;border:1.5px solid #d0d7e3;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;color:#555;cursor:pointer}
+.mr-btn:hover{background:#e3e8f4}
+.mr-btn.secili{background:#1565c0;border-color:#1565c0;color:#fff}
+.mr-kutu{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+.mr-kutu .sayi{font-size:24px;font-weight:800;line-height:1.1}
+.mr-kutu .etiket{font-size:11px;color:#888;margin-top:4px}
 /* DOKÜMAN NOT EKRANI */
 .dnot-tbtn{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
 .dnot-tbtn:hover{background:rgba(255,255,255,.28)}
@@ -216,12 +223,12 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   <!-- TASK TABLE -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:700;color:#1a237e">📋 Görev Listesi (Filtrelenmiş)</div>
-      <button class="btn btn-sm" onclick="exportGorevCSV()">⬇ CSV İndir</button>
+      <div style="font-size:14px;font-weight:700;color:#1a237e" id="gunluk-liste-baslik">📋 Görev Listesi (Filtrelenmiş)</div>
+      <button class="btn btn-sm" id="gunluk-csv-btn" onclick="exportGorevCSV()">⬇ CSV İndir</button>
     </div>
     <div style="overflow-x:auto">
       <table class="tbl">
-        <thead><tr><th>Tarih</th><th>Kart</th><th>Adım</th><th>İş Türü</th><th>Personel</th><th>Süre (dk)</th><th>Durum</th><th>İşlem</th></tr></thead>
+        <thead><tr id="gorev-thead"><th>Tarih</th><th>Kart</th><th>Adım</th><th>İş Türü</th><th>Personel</th><th>Süre (dk)</th><th>Durum</th><th>İşlem</th></tr></thead>
         <tbody id="gorev-tbody"></tbody>
       </table>
     </div>
@@ -369,6 +376,39 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
      TAB 5: RAPORLAMA
 ══════════════════════════════════════════════════ -->
 <div id="tab-raporlama" class="tab-panel">
+
+  <!-- ── MÜŞTERİ RAPORU ────────────────────────────────────────────────
+       Yalnızca rol='musteri' olduğunda görünür; bu sekmenin geri kalanı
+       (kapasite, maliyet, personel yükü) o durumda gizlenir. -->
+  <div id="musteri-rapor" style="display:none">
+    <div class="sec-title">📊 Çalışma Raporu</div>
+    <div class="sec-sub">Markanıza ait işlerin seçtiğiniz dönemdeki durumu.</div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="mr-donem-dugmeleri">
+          <button onclick="mrDonem('bugun')"  data-donem="bugun"  class="mr-btn">Bugün</button>
+          <button onclick="mrDonem('hafta')"  data-donem="hafta"  class="mr-btn">Bu Hafta</button>
+          <button onclick="mrDonem('ay')"     data-donem="ay"     class="mr-btn">Bu Ay</button>
+          <button onclick="mrDonem('ceyrek')" data-donem="ceyrek" class="mr-btn">Son 3 Ay</button>
+          <button onclick="mrDonem('tumu')"   data-donem="tumu"   class="mr-btn">Tümü</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
+          <div><div class="lbl">Başlangıç</div><input type="date" id="mr-bas" onchange="mrDonem('aralik')" style="min-width:150px"></div>
+          <div><div class="lbl">Bitiş</div><input type="date" id="mr-bit" onchange="mrDonem('aralik')" style="min-width:150px"></div>
+          <button class="btn btn-sm" onclick="mrCsvIndir()">⬇ CSV İndir</button>
+        </div>
+      </div>
+      <div id="mr-donem-etiketi" style="font-size:12px;color:#888;margin-top:10px"></div>
+    </div>
+
+    <div id="mr-ozet" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+    <div id="mr-onay-bekleyen" style="margin-bottom:16px"></div>
+    <div id="mr-marka-dagilim" style="margin-bottom:16px"></div>
+    <div id="mr-kart-tablosu"></div>
+  </div>
+
+  <div id="ekip-rapor-govde">
   <div class="sec-title">Operasyonel Raporlama</div>
   <!-- KPI -->
   <div class="kpi-grid">
@@ -475,6 +515,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       </table>
     </div>
   </div>
+  </div><!-- /ekip-rapor-govde -->
 </div>
 
 <!-- ══════════════════════════════════════════════════
@@ -711,8 +752,8 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:14px;font-weight:700;color:#1a237e">📎 Dokümanlar</div>
         <div id="dokuman-arac-cubugu" style="display:flex;gap:8px;align-items:center">
-        <button onclick="karsilastirmaAc()" style="background:#7b1fa2;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">🔍 Dosya Karşılaştır</button>
-        <label style="background:#1565c0;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;display:inline-block;user-select:none">
+        <button id="karsilastir-btn" onclick="karsilastirmaAc()" style="background:#7b1fa2;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">🔍 Dosya Karşılaştır</button>
+        <label id="dosya-yukle-etiketi" style="background:#1565c0;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;display:inline-block;user-select:none">
           + Dosya Yükle
           <input type="file" id="dosya-input" multiple
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.zip,.rar,.txt,.csv"
@@ -1074,8 +1115,10 @@ function adminMi(){ return !!aktifKullanici && aktifKullanici.rol==='admin'; }
   ikisi birlikte anlam taşır — tek başına arayüz kısıtı veriyi gizlemez.
 */
 function musteriMi(){ return !!aktifKullanici && aktifKullanici.rol==='musteri'; }
-// Müşteriye kapalı sekmeler (rol seçilse bile açılmaz)
-const MUSTERI_SEKMELERI=['urun'];
+// Müşterinin görebileceği sekmeler (rol seçilse bile başkası açılmaz).
+// Üçü de müşteri sürümüyle çalışır: Günlük Durum'da personel/süre sütunları,
+// Raporlama'da ajansın kapasite ve maliyet blokları gösterilmez.
+const MUSTERI_SEKMELERI=['gunluk','urun','raporlama'];
 function rolEtiketi(rol){ return rol==='admin'?'Yönetici':(rol==='musteri'?'Müşteri':'Personel'); }
 /*
   Aktif kullanıcının personel adı.
@@ -1283,23 +1326,45 @@ const MUSTERIYE_KAPALI=[
   'kart-ad-duzenle-btn','kart-aktif-btn','kart-tamamla-btn',
   'kart-arsivle-btn','kart-sil-btn',           // kart yaşam döngüsü
   'adim-ekle-karti',                           // adım ekleme formu
-  'dokuman-arac-cubugu',                       // dosya yükleme / karşılaştırma
-  'vk-section','vho-section','sim-sil-btn'
+  'dosya-yukle-etiketi',                       // dosya yükleme (karşılaştırma açık kalır)
+  'vk-section','vho-section','sim-sil-btn',
+  'ekip-rapor-govde',                          // ajans raporu (kapasite/maliyet)
+  'deadline-banner',                           // ekip içi gecikme uyarısı
+  'gunluk-csv-btn'                             // personel/süre sütunlu dışa aktarım
 ];
 function musteriGorunumuUygula(){
   MUSTERIYE_KAPALI.forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display='none';
   });
-  const t=document.getElementById('urun-sec-title');
-  if(t)t.textContent='📋 Çalışmalarınız';
-  const s=document.getElementById('urun-sec-sub');
-  if(s)s.textContent='Markanıza ait çalışmaların güncel durumunu buradan izleyebilir, onayınızı bekleyen adımları tamamlayabilirsiniz.';
+  const yaz=(id,metin)=>{const e=document.getElementById(id);if(e)e.textContent=metin;};
+  yaz('urun-sec-title','📋 Çalışmalarınız');
+  yaz('urun-sec-sub','Markanıza ait çalışmaların güncel durumunu buradan izleyebilir, onayınızı bekleyen adımları tamamlayabilirsiniz.');
   // Müşteri yalnızca kendi markalarını gördüğü için marka filtresi anlamsız
   // değil ama tek marka varsa gereksiz; iki ve üzeriyse açık kalır.
-  const mf=document.getElementById('uk-fmarka');
-  const grup=mf&&mf.closest('.filter-group');
-  if(grup)grup.style.display=(kullaniciMarkalari(aktifKullanici).length>1)?'':'none';
+  const cokMarka=kullaniciMarkalari(aktifKullanici).length>1;
+  const grup=id=>{const e=document.getElementById(id);return e&&e.closest('.filter-group');};
+  const um=grup('uk-fmarka'); if(um)um.style.display=cokMarka?'':'none';
+
+  // ── Günlük Durum (müşteri sürümü) ──
+  // Sekme etiketi de değişir: "Günlük Durum" ajansın iç terimi.
+  const gSekme=document.querySelector('.tab[onclick*="\'gunluk\'"]');
+  if(gSekme)gSekme.textContent='İş Takibi';
+  const rSekme=document.querySelector('.tab[onclick*="\'raporlama\'"]');
+  if(rSekme)rSekme.textContent='Rapor';
+  const gd=document.querySelector('#tab-gunluk .sec-title');
+  if(gd)gd.textContent='İş Takibi';
+  const gs=document.querySelector('#tab-gunluk .sec-sub');
+  if(gs)gs.textContent='Markanıza ait tüm adımlar tek listede. Satıra tıklayarak ilgili çalışmayı açabilirsiniz.';
+  yaz('gunluk-liste-baslik','📋 İş Listesi');
+  const gp=grup('g-fpersonel'); if(gp)gp.style.display='none';   // personel filtresi
+  const gm=grup('g-fmarka');    if(gm)gm.style.display=cokMarka?'':'none';
+  const th=document.getElementById('gorev-thead');
+  if(th)th.innerHTML='<th>Tarih</th><th>Marka</th><th>Çalışma</th><th>Adım</th><th>Durum</th>';
+
+  // ── Raporlama (müşteri sürümü) ──
+  const mr=document.getElementById('musteri-rapor');
+  if(mr)mr.style.display='block';
 }
 
 // ─── KULLANICI YÖNETİMİ ───────────────────────────────────────────────────────
@@ -1514,7 +1579,10 @@ function switchTab(name){
     return;
   }
   if(aktifKullanici.rol!=='admin'){
-    const allowed=aktifKullanici.sekmeler||[];
+    // Müşterinin sekme izni kullanıcı kaydından değil koddan gelir; sekme
+    // görünürlüğüyle (sekmeleriGuncelle) aynı listeden okunmalı, yoksa sekme
+    // görünür ama tıklandığında "erişim izniniz yok" der.
+    const allowed=musteriMi()?MUSTERI_SEKMELERI:(aktifKullanici.sekmeler||[]);
     if(!allowed.includes(name)){sbToast('Bu sekmeye erişim izniniz yok.');return;}
   }
   doSwitchTab(name);
@@ -1584,7 +1652,16 @@ async function musteriInit(){
   switchTab('urun');
   sekmeleriGuncelle();
   sel('uk-fmarka',markalar,'Tüm Markalar');
+  sel('g-fmarka',markalar,'Tüm Markalar');
   renderUrunKartlari();
+  renderGorevler();          // İş Takibi (Günlük Durum'un müşteri sürümü)
+  mrDonem('ay');             // Rapor varsayılanı: içinde bulunulan ay
+  // Filtre olayları init() içinde bağlanıyor; müşteri o yoldan geçmediği için
+  // burada ayrıca bağlanmalı, yoksa filtreler seçilir ama liste yenilenmez.
+  ['g-fstart','g-fend','g-fmarka','g-fdurum'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.addEventListener('change',renderGorevler);
+  });
   hideLoading();
 }
 
@@ -1801,6 +1878,9 @@ function refreshAllDropdowns(){
 function benimPersonelAdim(){
   if(!aktifKullanici)return null;
   if(aktifKullanici.rol==='admin')return null;
+  // Müşteri bir personel değildir; "bana atanan işler" kısıtı ona uygulanmaz.
+  // Uygulansaydı kendi adına atanmış iş olmadığı için hiçbir şey göremezdi.
+  if(aktifKullanici.rol==='musteri')return null;
   // 1) Kalıcı bağlantı: personel_id
   if(aktifKullanici.personel_id){
     const p=personeller.find(x=>x.id===aktifKullanici.personel_id);
@@ -1842,8 +1922,27 @@ function filteredAdimlar(){
 }
 function renderGorevler(){
   const list=filteredAdimlar();
-  checkDeadlines();
   const tbody=document.getElementById('gorev-tbody');
+  if(musteriMi()){
+    // Müşteri sürümü: personel, iş türü, süre ve durum değiştirme yok.
+    // Satıra tıklayınca ilgili çalışmanın kartı açılır.
+    if(!list.length){tbody.innerHTML=emptyRow(5,'Seçili aralıkta iş bulunamadı. Tarih seçimini genişletebilirsiniz.');return}
+    tbody.innerHTML=list.map(a=>{
+      const kart=urunKartlari.find(x=>x.id===a.kart_id);
+      const marka=kart?kart.marka:'';
+      const mRenk=markaRengi(marka);
+      const bdg={'Bekliyor':'badge-bek','Devam Ediyor':'badge-dev','Tamamlandı':'badge-tam','RET':'badge-ret'}[a.durum]||'badge-bek';
+      return `<tr style="cursor:pointer" onclick="switchTab('urun');setTimeout(()=>kartDetayAc('${a.kart_id}'),50)">
+        <td style="border-left:4px solid ${mRenk}">${a.tarih||'—'}</td>
+        <td>${markaChip(marka)}</td>
+        <td><strong style="font-size:12px;color:#1a237e">${kacir(kart?kart.ad:'—')}</strong></td>
+        <td>${kacir(a.ad)}${a.musteri_adimi?' <span style="font-size:10px;color:#e65100;font-weight:700">👤 onayınız</span>':''}</td>
+        <td><span class="badge ${bdg}">${a.durum}</span></td>
+      </tr>`;
+    }).join('');
+    return;
+  }
+  checkDeadlines();
   if(!list.length){tbody.innerHTML=emptyRow(8,'Seçili tarih aralığında ürün kartı adımı bulunamadı. Ürün Kartları sekmesinden adımlara tarih atayın.');return}
   tbody.innerHTML=list.map(a=>{
     const kart=urunKartlari.find(x=>x.id===a.kart_id);
@@ -3454,6 +3553,178 @@ async function musteriKarar(adimId,karar){
     hideLoading();
   }
 }
+// ── MÜŞTERİ RAPORU ─────────────────────────────────────────────────────────
+// Ajansın raporlama ekranı kapasite, maliyet ve personel yükü üzerine kurulu;
+// bunların hiçbiri müşteriye gösterilemez. Bu yüzden aynı sekmede ayrı bir
+// rapor gövdesi var: dönem seçilir, işin nerede olduğu özetlenir.
+let mrDurum={donem:'ay',bas:'',bit:''};
+
+function haftaBasi(){
+  const d=new Date();
+  const g=(d.getDay()+6)%7;          // pazartesi = 0
+  d.setDate(d.getDate()-g);
+  return dateToStr(d);
+}
+function ayOnce(n){
+  const d=new Date();
+  d.setMonth(d.getMonth()-n);
+  return dateToStr(d);
+}
+function mrDonem(tip){
+  mrDurum.donem=tip;
+  const bas=document.getElementById('mr-bas'), bit=document.getElementById('mr-bit');
+  if(tip==='bugun'){ mrDurum.bas=today();        mrDurum.bit=today(); }
+  else if(tip==='hafta'){ mrDurum.bas=haftaBasi(); mrDurum.bit=today(); }
+  else if(tip==='ay'){ mrDurum.bas=ayBasi();     mrDurum.bit=aySonu(); }
+  else if(tip==='ceyrek'){ mrDurum.bas=ayOnce(3); mrDurum.bit=today(); }
+  else if(tip==='tumu'){ mrDurum.bas='';         mrDurum.bit=''; }
+  else if(tip==='aralik'){ mrDurum.bas=bas.value; mrDurum.bit=bit.value; }
+  // Hazır dönem seçildiyse tarih kutuları da güncellenir ki kullanıcı
+  // hangi aralığa baktığını görsün ve oradan ince ayar yapabilsin.
+  if(tip!=='aralik'){ if(bas)bas.value=mrDurum.bas; if(bit)bit.value=mrDurum.bit; }
+  document.querySelectorAll('#mr-donem-dugmeleri .mr-btn').forEach(b=>{
+    b.classList.toggle('secili', b.dataset.donem===tip);
+  });
+  renderMusteriRapor();
+}
+// Dönemdeki adımlar. Tarihsiz adımlar bir döneme ait sayılmaz; "Tümü"
+// seçildiğinde hepsi gelir.
+function mrAdimlar(){
+  return urunAdimlar.filter(a=>{
+    if(a.arsivlendi)return false;
+    if(!mrDurum.bas&&!mrDurum.bit)return true;
+    if(!a.tarih)return false;
+    if(mrDurum.bas&&a.tarih<mrDurum.bas)return false;
+    if(mrDurum.bit&&a.tarih>mrDurum.bit)return false;
+    return true;
+  });
+}
+function mrKutu(sayi,etiket,renk){
+  return `<div class="mr-kutu"><div class="sayi" style="color:${renk}">${sayi}</div><div class="etiket">${etiket}</div></div>`;
+}
+function renderMusteriRapor(){
+  if(!musteriMi())return;
+  const adimlar=mrAdimlar();
+  const kartIds=new Set(adimlar.map(a=>a.kart_id));
+  const say=d=>adimlar.filter(a=>a.durum===d).length;
+
+  const etiket=document.getElementById('mr-donem-etiketi');
+  if(etiket)etiket.textContent=(!mrDurum.bas&&!mrDurum.bit)
+    ?`Tüm zamanlar · ${kartIds.size} çalışma, ${adimlar.length} adım`
+    :`${mrDurum.bas||'başlangıç yok'} — ${mrDurum.bit||'bitiş yok'} · ${kartIds.size} çalışma, ${adimlar.length} adım`;
+
+  const ozet=document.getElementById('mr-ozet');
+  if(ozet)ozet.innerHTML=
+     mrKutu(kartIds.size,'Çalışma','#1a237e')
+    +mrKutu(say('Tamamlandı'),'Tamamlanan adım','#2e7d32')
+    +mrKutu(say('Devam Ediyor'),'Devam eden','#1565c0')
+    +mrKutu(say('Bekliyor'),'Bekleyen','#9e9e9e')
+    +mrKutu(say('RET'),'Revizyon (RET)','#c62828');
+
+  // Onay bekleyenler dönemden bağımsızdır: aksiyon gerektirir, kaçmamalı.
+  const bekleyen=urunAdimlar.filter(a=>!a.arsivlendi&&a.musteri_adimi&&a.durum!=='Tamamlandı');
+  const ob=document.getElementById('mr-onay-bekleyen');
+  if(ob)ob.innerHTML=!bekleyen.length?'':
+    `<div class="card" style="border-left:4px solid #ff8f00;background:#fffdf6">
+      <div style="font-size:14px;font-weight:700;color:#e65100;margin-bottom:10px">🤝 Onayınızı bekleyen ${bekleyen.length} adım</div>
+      ${bekleyen.map(a=>{
+        const k=urunKartlari.find(x=>x.id===a.kart_id);
+        return `<div onclick="switchTab('urun');setTimeout(()=>kartDetayAc('${a.kart_id}'),50)"
+          style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#fff;border:1px solid #ffe0a3;border-radius:8px;margin-bottom:6px;cursor:pointer">
+          ${markaNokta(k?k.marka:'')}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#1a237e">${kacir(k?k.ad:'—')}</div>
+            <div style="font-size:11px;color:#888">${kacir(a.ad)}${a.tarih?' · 📅 '+a.tarih:''}</div>
+          </div>
+          <span class="badge ${a.durum==='RET'?'badge-ret':'badge-bek'}">${a.durum}</span>
+          <span style="color:#1565c0;font-size:12px;font-weight:700">Aç →</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  // Marka dağılımı yalnızca birden çok markası olan müşteride anlamlı
+  const md=document.getElementById('mr-marka-dagilim');
+  if(md){
+    const markaSay={};
+    adimlar.forEach(a=>{
+      const k=urunKartlari.find(x=>x.id===a.kart_id);
+      const m=k?k.marka:'—';
+      if(!markaSay[m])markaSay[m]={toplam:0,tamam:0};
+      markaSay[m].toplam++;
+      if(a.durum==='Tamamlandı')markaSay[m].tamam++;
+    });
+    const markalarDizi=Object.keys(markaSay).sort((a,b)=>markaSay[b].toplam-markaSay[a].toplam);
+    md.innerHTML=markalarDizi.length<2?'':
+      `<div class="card">
+        <div style="font-size:14px;font-weight:700;color:#1a237e;margin-bottom:12px">Markaya göre dağılım</div>
+        ${markalarDizi.map(m=>{
+          const o=markaSay[m], pct=o.toplam?Math.round(o.tamam/o.toplam*100):0;
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="display:flex;align-items:center;gap:6px">${markaNokta(m)}<strong>${kacir(m)}</strong></span>
+              <span style="color:#888">${o.tamam}/${o.toplam} adım · %${pct}</span>
+            </div>
+            <div style="background:#e8ecf0;border-radius:4px;height:7px">
+              <div style="background:${markaRengi(m)};height:7px;border-radius:4px;width:${pct}%"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // Kart bazlı ilerleme
+  const kt=document.getElementById('mr-kart-tablosu');
+  if(!kt)return;
+  const satirlar=[...kartIds].map(id=>{
+    const k=urunKartlari.find(x=>x.id===id);
+    const hepsi=urunAdimlar.filter(a=>a.kart_id===id&&!a.arsivlendi);
+    const tam=hepsi.filter(a=>a.durum==='Tamamlandı').length;
+    const ret=hepsi.filter(a=>a.durum==='RET').length;
+    const aktif=hepsi.filter(a=>a.durum==='Devam Ediyor')[0];
+    const tarihler=hepsi.map(a=>a.tarih).filter(Boolean).sort();
+    return {k,tam,top:hepsi.length,ret,aktif,son:tarihler[tarihler.length-1]||''};
+  }).filter(r=>r.k).sort((a,b)=>(b.son||'').localeCompare(a.son||''));
+
+  kt.innerHTML=`<div class="card">
+    <div style="font-size:14px;font-weight:700;color:#1a237e;margin-bottom:12px">Çalışmalar (${satirlar.length})</div>
+    ${!satirlar.length
+      ?'<div style="color:#aaa;font-style:italic;font-size:13px;padding:16px;text-align:center">Bu dönemde tarihi bu aralığa düşen bir adım yok. Dönemi genişletin ya da "Tümü" seçin.</div>'
+      :`<div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Çalışma</th><th>Marka</th><th>İlerleme</th><th>Şu anki adım</th><th>Son tarih</th></tr></thead>
+        <tbody>${satirlar.map(r=>{
+          const pct=r.top?Math.round(r.tam/r.top*100):0;
+          return `<tr style="cursor:pointer" onclick="switchTab('urun');setTimeout(()=>kartDetayAc('${r.k.id}'),50)">
+            <td style="border-left:4px solid ${markaRengi(r.k.marka)}">
+              <strong>${kacir(r.k.ad)}</strong>
+              ${r.ret?' <span class="badge badge-ret" style="font-size:9px">RET</span>':''}
+            </td>
+            <td>${markaChip(r.k.marka)}</td>
+            <td style="min-width:150px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;background:#e8ecf0;border-radius:4px;height:6px;min-width:60px">
+                  <div style="background:${pct===100?'#2e7d32':'#1565c0'};height:6px;border-radius:4px;width:${pct}%"></div>
+                </div>
+                <span style="font-size:11px;color:#888;white-space:nowrap">${r.tam}/${r.top}</span>
+              </div>
+            </td>
+            <td style="font-size:12px;color:${r.aktif?'#1565c0':'#aaa'}">${r.aktif?kacir(r.aktif.ad):'—'}</td>
+            <td style="font-size:12px;color:#888">${r.son||'—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+  </div>`;
+}
+function mrCsvIndir(){
+  const adimlar=mrAdimlar();
+  const satirlar=[['Tarih','Marka','Çalışma','Adım','Durum']];
+  adimlar.forEach(a=>{
+    const k=urunKartlari.find(x=>x.id===a.kart_id);
+    satirlar.push([a.tarih||'',k?k.marka:'',k?k.ad:'',a.ad,a.durum]);
+  });
+  const ad=(!mrDurum.bas&&!mrDurum.bit)?'tumu':`${mrDurum.bas}_${mrDurum.bit}`;
+  exportCSV(satirlar,`calisma-raporu_${ad}.csv`);
+}
+
 // Müşteri kartı açtığında onay adımlarının notlarını peşinen yükler
 // (adımlar açılıp kapanmadığı için tek seferde alınır).
 async function musteriNotlariYukle(kartId){
@@ -3972,7 +4243,7 @@ function renderKartDokumanlari(kartId){
       <div style="font-size:22px;flex-shrink:0">${ikon}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.dosya_adi}</div>
-        <div style="font-size:10px;color:#aaa;margin-top:2px">${boyut} · ${d.yuklenme_tarihi||''} · ${d.yukleyen||'—'}</div>
+        <div style="font-size:10px;color:#aaa;margin-top:2px">${boyut} · ${d.yuklenme_tarihi||''}${musteriMi()?'':' · '+(d.yukleyen||'—')}</div>
       </div>
       ${dokumanNotDesteklenir(d.dosya_turu)?(()=>{
         const s=kartDokumanNotSayilari[d.id]||{acik:0,toplam:0};
@@ -3980,7 +4251,7 @@ function renderKartDokumanlari(kartId){
         return `<button onclick="dokumanNotAc('${d.id}')" title="Belge üzerine not / işaretleme" style="background:${renk};color:${yazi};border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📝 Notlar${s.acik>0?' ('+s.acik+')':''}</button>`;
       })():''}
       <a href="${url}" target="_blank" download="${d.dosya_adi}" style="background:#e3f2fd;color:#1565c0;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;flex-shrink:0">⬇ İndir</a>
-      <button onclick="dosyaSil('${d.id}','${d.dosya_yolu}','${safeAdi}')" style="background:#fce4ec;color:#c62828;border:none;border-radius:6px;padding:5px 10px;font-size:14px;cursor:pointer;flex-shrink:0" title="Sil">🗑</button>
+      ${musteriMi()?'':`<button onclick="dosyaSil('${d.id}','${d.dosya_yolu}','${safeAdi}')" style="background:#fce4ec;color:#c62828;border:none;border-radius:6px;padding:5px 10px;font-size:14px;cursor:pointer;flex-shrink:0" title="Sil">🗑</button>`}
     </div>`;
   }).join('');
 }
