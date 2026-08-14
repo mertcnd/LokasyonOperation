@@ -877,7 +877,7 @@ const sbPost = async(t,d)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}`,{me
 const sbPatch= async(t,c,v,d)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?${c}=eq.${encodeURIComponent(v)}`,{method:'PATCH',headers:SBH({'Prefer':'return=minimal'}),body:JSON.stringify(d)});if(!r.ok){let msg='';try{const j=await r.json();msg=j.message||j.hint||JSON.stringify(j);}catch(e2){msg=await r.text();}console.error('PATCH',t,r.status,msg);sbToast('⚠ Güncelleme hatası ('+r.status+'): '+msg.slice(0,80));return false;}return true;}catch(e){console.error('PATCH',t,e);sbToast('⚠ Bağlantı hatası: '+e.message);return false;}};
 const sbPatchSilent= async(t,c,v,d)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?${c}=eq.${encodeURIComponent(v)}`,{method:'PATCH',headers:SBH({'Prefer':'return=minimal'}),body:JSON.stringify(d)});if(!r.ok){const e=await r.text();console.warn('PATCH(sessiz)',t,r.status,e);}}catch(e){console.warn('PATCH(sessiz)',t,e);}};
 const sbDel  = async(t,c,v)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?${c}=eq.${encodeURIComponent(v)}`,{method:'DELETE',headers:SBH()});if(!r.ok){const e=await r.text();console.error('DEL',t,r.status,e);sbToast('Silme hatası ('+r.status+').');}}catch(e){console.error('DEL',t,e);}};
-const sbUps  = async(t,d,k)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?on_conflict=${k}`,{method:'POST',headers:SBH({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(d)});if(!r.ok){const e=await r.text();console.error('UPS',t,r.status,e);sbToast('Kayıt hatası ('+r.status+').');}}catch(e){console.error('UPS',t,e);}};
+const sbUps  = async(t,d,k)=>{try{const r=await fetch(`${SB_URL}/rest/v1/${t}?on_conflict=${k}`,{method:'POST',headers:SBH({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(d)});if(!r.ok){const e=await r.text();console.error('UPS',t,r.status,e);sbToast('Kayıt hatası ('+r.status+').');return false;}return true;}catch(e){console.error('UPS',t,e);return false;}};
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let gorevler=[],izinler=[],simPaketler=[],simKayitlar=[],todos=[];
@@ -2398,6 +2398,16 @@ function aktifFiyatSatiri(itAd){
   const sec=z=>(ozel[z]!==''&&ozel[z]!=null)?ozel[z]:(genel[z]||'');
   return {basit:sec('basit'),normal:sec('normal'),kompleks:sec('kompleks')};
 }
+/*
+  Fiyat listesi CSV'si Excel'e girip çıkmak için var; bu yüzden sıradan
+  exportCSV'den ayrı tutuluyor:
+
+  · Ayırıcı ";" — Türkçe Excel'in liste ayırıcısı virgül değil noktalı virgül.
+    Virgülle yazınca Excel dosyayı TEK sütuna açıyor, kullanıcı kaydedince
+    her satır tırnak içine giriyor ve dosya geri yüklenemez hale geliyordu.
+  · Başta "sep=;" satırı — Excel bunu okuyup ayırıcıyı yerel ayardan bağımsız
+    doğru seçiyor. Yükleme tarafı bu satırı atlar.
+*/
 function fiyatListesiIndir(){
   const marka=document.getElementById('m-musteri')?.value||'';
   const rows=[['İş Türü','Basit','Normal','Kompleks']];
@@ -2405,7 +2415,79 @@ function fiyatListesiIndir(){
     const f=aktifFiyatSatiri(it.ad);
     rows.push([it.ad,f.basit,f.normal,f.kompleks]);
   });
-  exportCSV(rows,(marka?('fiyatlar_'+marka.replace(/\s+/g,'_')):'fiyatlar_genel')+'.csv');
+  const govde=rows.map(r=>r.map(c=>{
+    const s=(c??'').toString();
+    return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  }).join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+'sep=;\r\n'+govde],{type:'text/csv;charset=utf-8'}));
+  a.download=(marka?('fiyatlar_'+marka.replace(/\s+/g,'_')):'fiyatlar_genel')+'.csv';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+// ── CSV ayrıştırma (tırnak farkında) ──────────────────────────────────────
+// Basit split(',') Excel'den dönen dosyalarda kırılıyordu: tırnak içindeki
+// ayırıcılar ve ikilenmiş tırnaklar ("") doğru çözülmeli.
+function csvSatirAyristir(satir,ayr){
+  const alanlar=[]; let s='', tirnakta=false;
+  for(let i=0;i<satir.length;i++){
+    const c=satir[i];
+    if(tirnakta){
+      if(c==='"'){ if(satir[i+1]==='"'){s+='"';i++;} else tirnakta=false; }
+      else s+=c;
+    }else{
+      if(c==='"')tirnakta=true;
+      else if(c===ayr){alanlar.push(s);s='';}
+      else s+=c;
+    }
+  }
+  alanlar.push(s);
+  return alanlar.map(x=>x.trim());
+}
+function csvAyristir(metin){
+  let t=metin.replace(/^﻿/,'');
+  const satirlar=t.split(/\r?\n/).filter(s=>s.trim());
+  // Excel'in yazdığı "sep=;" yönerge satırı veri değildir
+  if(satirlar.length&&/^sep=./i.test(satirlar[0].trim()))satirlar.shift();
+  if(!satirlar.length)return [];
+  // Ayırıcıyı say: tırnak dışındaki ; , ve sekmeden en çok geçen kazanır
+  const sayAyrik=(s,ayr)=>{let n=0,t2=false;for(const c of s){if(c==='"')t2=!t2;else if(c===ayr&&!t2)n++;}return n;};
+  const adaylar=[';',',','\t'];
+  const ayr=adaylar.map(a=>[a,sayAyrik(satirlar[0],a)]).sort((x,y)=>y[1]-x[1])[0][0];
+  let tablo=satirlar.map(s=>csvSatirAyristir(s,ayr));
+  // Excel dosyayı tek sütuna açıp öyle kaydettiyse: her satır tek alan olur
+  // ama alanın içinde gerçek ayırıcı vardır. Bir kez daha çözülür.
+  if(tablo.every(r=>r.length===1)){
+    const ic=adaylar.map(a=>[a,sayAyrik(tablo[0][0],a)]).sort((x,y)=>y[1]-x[1])[0];
+    if(ic[1]>0)tablo=tablo.map(r=>csvSatirAyristir(r[0],ic[0]));
+  }
+  return tablo;
+}
+/*
+  Sayı metnini normalleştirir. Excel Türkçe biçimlendirmede binlik ayracı
+  nokta, ondalık ayracı virgül yazıyor: "5.000" parseFloat ile 5 oluyordu —
+  yani 5.000 TL'lik fiyat sessizce 5 TL'ye düşüyordu.
+*/
+function sayiMetni(x){
+  let s=String(x??'').trim().replace(/[^\d.,-]/g,'');
+  if(!s)return '';
+  const nokta=s.lastIndexOf('.'), virgul=s.lastIndexOf(',');
+  if(nokta>-1&&virgul>-1){
+    // İkisi de varsa sağdaki ondalık ayracıdır, diğeri binliktir
+    const ondalik=nokta>virgul?'.':',';
+    const binlik =ondalik==='.'?',':'.';
+    s=s.split(binlik).join('').replace(ondalik,'.');
+  }else if(nokta>-1||virgul>-1){
+    const ayr=nokta>-1?'.':',';
+    const parcalar=s.split(ayr);
+    // Tek kez geçiyorsa ve ardından 3 hane yoksa ondalıktır; aksi hâlde binlik
+    s=(parcalar.length===2&&parcalar[1].length!==3)
+      ? parcalar[0]+'.'+parcalar[1]
+      : parcalar.join('');
+  }
+  const n=parseFloat(s);
+  return isNaN(n)?'':String(n);
 }
 async function fiyatListesiYukle(event){
   const file=event.target.files[0];
@@ -2414,35 +2496,58 @@ async function fiyatListesiYukle(event){
   const marka=document.getElementById('m-musteri')?.value||'';
   const hedef=marka?('"'+marka+'" markasına ÖZEL fiyatlar'):'GENEL fiyat listesi';
   const text=await file.text();
-  const satirlar=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  // Ayirici tespiti (; veya ,)
-  const ayr=satirlar[0].includes(';')?';':',';
-  let uygulanan=0, atlanan=[];
-  const veriler=[];
-  for(let i=1;i<satirlar.length;i++){
-    const p=satirlar[i].split(ayr).map(x=>x.trim().replace(/^"|"$/g,''));
+  const tablo=csvAyristir(text);
+  // Tek satırlık (başlıksız) dosya da geçerlidir; başlık tespiti aşağıda.
+  if(!tablo.length){alert('Dosya boş görünüyor ya da okunamadı.');return;}
+
+  // İş türü eşleştirmesi büyük/küçük harf ve fazla boşluğa takılmasın
+  const anahtar=s=>String(s??'').trim().toLocaleLowerCase('tr').replace(/\s+/g,' ');
+  const turHarita=new Map(isTurleri.map(it=>[anahtar(it.ad),it.ad]));
+
+  // İlk satır başlıksa atlanır; değilse veri olarak işlenir
+  const bas=turHarita.has(anahtar(tablo[0][0]))?0:1;
+  let uygulanan=0; const atlanan=[]; const veriler=[];
+  for(let i=bas;i<tablo.length;i++){
+    const p=tablo[i];
     if(p.length<4)continue;
-    const [ad,b,n,k]=p;
-    if(!isTurleri.find(it=>it.ad===ad)){atlanan.push(ad);continue;}
-    veriler.push({ad,basit:b,normal:n,kompleks:k});
+    const gercekAd=turHarita.get(anahtar(p[0]));
+    if(!gercekAd){ if(p[0])atlanan.push(p[0]); continue; }
+    veriler.push({ad:gercekAd,basit:sayiMetni(p[1]),normal:sayiMetni(p[2]),kompleks:sayiMetni(p[3])});
   }
-  if(!veriler.length){alert('CSV okunamadı. Beklenen format: İş Türü'+ayr+'Basit'+ayr+'Normal'+ayr+'Kompleks (ilk satır başlık).');return;}
+  if(!veriler.length){
+    alert('Dosyadaki hiçbir satır tanınan bir iş türüyle eşleşmedi.\n\n'
+      +(atlanan.length?('Okunan ilk değerler:\n  · '+atlanan.slice(0,5).join('\n  · ')
+         +'\n\nBunlar Veri Yönetimi\'ndeki iş türü adlarıyla birebir aynı olmalı.')
+        :'Beklenen sütun sırası: İş Türü · Basit · Normal · Kompleks'));
+    return;
+  }
   if(!confirm(veriler.length+' iş türü için fiyatlar '+hedef+' olarak güncellenecek. Onaylıyor musunuz?'))return;
   showLoading('Fiyatlar yükleniyor...');
+  const basarisiz=[];
   for(const v of veriler){
+    let ok;
     if(marka){
       if(!mFiyatlarMarka[marka])mFiyatlarMarka[marka]={};
       mFiyatlarMarka[marka][v.ad]={basit:v.basit,normal:v.normal,kompleks:v.kompleks};
-      await sbUps('m_fiyatlar_marka',{marka,is_turu_ad:v.ad,basit:v.basit||null,normal:v.normal||null,kompleks:v.kompleks||null},'marka,is_turu_ad');
+      ok=await sbUps('m_fiyatlar_marka',{marka,is_turu_ad:v.ad,basit:v.basit||null,normal:v.normal||null,kompleks:v.kompleks||null},'marka,is_turu_ad');
     }else{
       mFiyatlar[v.ad]={basit:v.basit,normal:v.normal,kompleks:v.kompleks};
-      await sbUps('m_fiyatlar',{is_turu_ad:v.ad,...mFiyatlar[v.ad]},'is_turu_ad');
+      ok=await sbUps('m_fiyatlar',{is_turu_ad:v.ad,...mFiyatlar[v.ad]},'is_turu_ad');
     }
-    uygulanan++;
+    // Kayıt gerçekten yazıldıysa sayılır; yoksa "yüklendi" deyip veriyi
+    // kaybetmiş oluyorduk.
+    if(ok===false)basarisiz.push(v.ad); else uygulanan++;
   }
   hideLoading();
+  renderMaliyetFiyatTbl();
   renderMaliyet();
-  sbToast('✔ '+uygulanan+' satır yüklendi'+(atlanan.length?' ('+atlanan.length+' bilinmeyen iş türü atlandı)':''));
+  if(basarisiz.length){
+    alert(uygulanan+' satır kaydedildi, '+basarisiz.length+' satır KAYDEDİLEMEDİ:\n\n  · '
+      +basarisiz.slice(0,8).join('\n  · ')
+      +'\n\nSayfayı yenileyip tekrar deneyin; sürerse yöneticinize bildirin.');
+  }else{
+    sbToast('✔ '+uygulanan+' satır yüklendi'+(atlanan.length?' ('+atlanan.length+' tanınmayan satır atlandı)':''));
+  }
 }
 async function tumFiyatlariKaydet(){
   const marka=document.getElementById('m-musteri')?.value||'';
