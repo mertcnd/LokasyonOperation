@@ -5319,9 +5319,11 @@ async function asistanSor(){
   if(asistanGecmis.length>10)asistanGecmis=asistanGecmis.slice(-10);
   const beklDiv=asistanMesajEkle('assistant','Düşünüyorum...');
   try{
+    // SBH() kullanıcının oturum jetonunu ekler; fonksiyon bunu doğrulamadan
+    // istek kabul etmiyor (aksi hâlde şirketin API anahtarı herkese açıktı).
     const r=await fetch(`${SB_URL}/functions/v1/ai-assistant`,{
       method:'POST',
-      headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+      headers:SBH(),
       body:JSON.stringify({messages:asistanGecmis,context:asistanVeriOzeti()})
     });
     const j=await r.json();
