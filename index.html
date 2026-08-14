@@ -819,7 +819,7 @@ const SB_KEY = 'sb_publishable_riuGacr-UrLrrkfxYSqgfw_IlvFAxL_'; //
 //   2. sql/auth-rls.sql uygulanır
 //   3. Bu sabit true yapılıp panel yayına alınır
 // Ayrıntı: sql/auth-rls.sql başındaki açıklama.
-const AUTH_MODU = false;
+const AUTH_MODU = true;
 const AUTH_KEY  = 'lokasyon_auth';
 let authOturum  = null;   // {access_token, refresh_token, expires_at}
 
@@ -979,13 +979,24 @@ function authOturumYaz(j){
   };
   localStorage.setItem(AUTH_KEY,JSON.stringify(authOturum));
 }
+// Supabase Auth hataları İngilizce döner; kullanıcıya Türkçe gösterilir.
+function authHataMetni(j,durum){
+  const ham=String(j.error_description||j.msg||j.error||'').toLowerCase();
+  if(ham.includes('invalid login'))     return 'E-posta veya şifre hatalı.';
+  if(ham.includes('email not confirmed'))return 'Hesabınız henüz onaylanmamış. Yöneticinize bildirin.';
+  if(ham.includes('too many')||durum===429)
+    return 'Çok fazla deneme yapıldı. Birkaç dakika sonra tekrar deneyin.';
+  if(ham.includes('user not found'))    return 'Bu e-posta ile kayıtlı hesap yok.';
+  if(durum>=500)                        return 'Sunucuya ulaşılamadı. Az sonra tekrar deneyin.';
+  return 'Giriş yapılamadı. Bilgilerinizi kontrol edin.';
+}
 async function authGiris(email,sifre){
   const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{
     method:'POST',headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({email:String(email).trim().toLowerCase(),password:sifre})
   });
   const j=await r.json().catch(()=>({}));
-  if(!r.ok)return {hata:(j.error_description||j.msg||'E-posta veya şifre hatalı.')};
+  if(!r.ok)return {hata:authHataMetni(j,r.status)};
   authOturumYaz(j);
   return {ok:true,uid:j.user&&j.user.id};
 }
