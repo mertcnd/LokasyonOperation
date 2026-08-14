@@ -396,7 +396,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <div style="display:flex;gap:8px;align-items:flex-end;margin-left:auto;flex-wrap:wrap">
           <div><div class="lbl">Başlangıç</div><input type="date" id="mr-bas" onchange="mrDonem('aralik')" style="min-width:150px"></div>
           <div><div class="lbl">Bitiş</div><input type="date" id="mr-bit" onchange="mrDonem('aralik')" style="min-width:150px"></div>
-          <button class="btn btn-sm" onclick="mrCsvIndir()">⬇ CSV İndir</button>
+          <button class="btn btn-sm" id="mr-excel-btn" onclick="mrExcelIndir()" style="background:#1d6f42">⬇ Excel İndir</button>
         </div>
       </div>
       <div id="mr-donem-etiketi" style="font-size:12px;color:#888;margin-top:10px"></div>
@@ -3714,12 +3714,254 @@ function renderMusteriRapor(){
       </table></div>`}
   </div>`;
 }
+// ── RAPORUN EXCEL ÇIKTISI ──────────────────────────────────────────────────
+// Ham CSV müşteri için okunaksızdı. Bunun yerine haftalık özet mailiyle aynı
+// düzende, biçimli bir .xlsx üretiliyor: başlık, dönem, özet kutuları,
+// gecikmiş/onay bekleyen uyarıları ve kart kart adım tabloları.
+// ExcelJS ~950 KB olduğu için sayfa açılışında değil, indirme anında yüklenir.
+const EXCELJS_CDN='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+function betikYukle(url){
+  return new Promise((coz,red)=>{
+    const s=document.createElement('script');
+    s.src=url; s.onload=coz; s.onerror=()=>red(new Error('Betik yüklenemedi'));
+    document.head.appendChild(s);
+  });
+}
+const XL_RENK={
+  lacivert:'FF1A237E', mavi:'FF1565C0', beyaz:'FFFFFFFF',
+  cizgi:'FFE2E8F0',  zemin:'FFF6F8FC', gri:'FF8A92A3',
+  tamamZemin:'FFE8F5E9', tamamYazi:'FF2E7D32',
+  devamZemin:'FFE3F2FD', devamYazi:'FF1565C0',
+  beklZemin:'FFFFF3E0', beklYazi:'FFE65100',
+  retZemin:'FFFFEBEE',  retYazi:'FFC62828',
+  uyariZemin:'FFFFF8E1', uyariYazi:'FF7A5B00'
+};
+function xlDurumBiciminden(durum){
+  if(durum==='Tamamlandı')  return [XL_RENK.tamamZemin,XL_RENK.tamamYazi];
+  if(durum==='Devam Ediyor')return [XL_RENK.devamZemin,XL_RENK.devamYazi];
+  if(durum==='RET')         return [XL_RENK.retZemin,  XL_RENK.retYazi];
+  return [XL_RENK.beklZemin,XL_RENK.beklYazi];
+}
+function xlTarih(g){
+  if(!g)return '—';
+  const p=String(g).split('-');
+  return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:g;
+}
+
+async function mrExcelIndir(){
+  const btn=document.getElementById('mr-excel-btn');
+  const eskiMetin=btn?btn.textContent:'';
+  if(btn){btn.textContent='Hazırlanıyor...';btn.disabled=true;}
+  try{
+    if(!window.ExcelJS)await betikYukle(EXCELJS_CDN);
+    await mrExcelUret();
+  }catch(e){
+    console.error('Excel üretilemedi:',e);
+    // Kütüphane yüklenemezse kullanıcı elleri boş kalmasın diye CSV'ye düşülür.
+    if(confirm('Excel dosyası oluşturulamadı (bağlantı sorunu olabilir).\n\nBunun yerine basit CSV indirilsin mi?'))mrCsvIndir();
+  }finally{
+    if(btn){btn.textContent=eskiMetin;btn.disabled=false;}
+  }
+}
+
+async function mrExcelUret(){
+  const adimlar=mrAdimlar();
+  const kartIds=[...new Set(adimlar.map(a=>a.kart_id))];
+  const say=d=>adimlar.filter(a=>a.durum===d).length;
+  const bugun=today();
+  const gecikmis=adimlar.filter(a=>a.tarih&&a.tarih<bugun&&a.durum!=='Tamamlandı');
+  const onayBekleyen=urunAdimlar.filter(a=>!a.arsivlendi&&a.musteri_adimi&&a.durum!=='Tamamlandı');
+  const donem=(!mrDurum.bas&&!mrDurum.bit)
+    ?'Tüm zamanlar'
+    :`${xlTarih(mrDurum.bas)} – ${xlTarih(mrDurum.bit)}`;
+  const markaBasligi=kullaniciMarkalari(aktifKullanici).join(', ')||'Çalışmalarınız';
+
+  const wb=new ExcelJS.Workbook();
+  wb.creator='Lokasyon İstanbul Operasyon Paneli';
+  wb.created=new Date();
+  const ws=wb.addWorksheet('Çalışma Raporu',{
+    views:[{showGridLines:false,state:'frozen',ySplit:2}],
+    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
+  });
+  ws.columns=[{width:6},{width:38},{width:22},{width:16},{width:16},{width:16}];
+
+  let s=1;
+  const hucre=(satir,sutun)=>ws.getCell(satir,sutun);
+  const dolgu=(c,renk)=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:renk}};};
+  const kenar=(c,renk)=>{const k={style:'thin',color:{argb:renk||XL_RENK.cizgi}};c.border={top:k,left:k,bottom:k,right:k};};
+
+  // ── Başlık ──
+  ws.mergeCells(s,1,s,6);
+  const b1=hucre(s,1);
+  b1.value=`${markaBasligi} · Çalışma Raporu`;
+  b1.font={bold:true,size:16,color:{argb:XL_RENK.beyaz}};
+  b1.alignment={vertical:'middle',indent:1};
+  dolgu(b1,XL_RENK.lacivert);
+  ws.getRow(s).height=30; s++;
+
+  ws.mergeCells(s,1,s,6);
+  const b2=hucre(s,1);
+  b2.value=`${donem} · Lokasyon İstanbul Operasyon Paneli`;
+  b2.font={size:10,color:{argb:XL_RENK.beyaz}};
+  b2.alignment={vertical:'middle',indent:1};
+  dolgu(b2,XL_RENK.mavi);
+  ws.getRow(s).height=20; s+=2;
+
+  // ── Özet kutuları ──
+  const kutular=[
+    [kartIds.length,'ÇALIŞMA',XL_RENK.lacivert],
+    [say('Tamamlandı'),'TAMAMLANAN ADIM',XL_RENK.tamamYazi],
+    [say('Devam Ediyor'),'DEVAM EDEN',XL_RENK.devamYazi],
+    [say('Bekliyor'),'BEKLEYEN',XL_RENK.gri],
+    [say('RET'),'REVİZYON (RET)',XL_RENK.retYazi]
+  ];
+  kutular.forEach((k,i)=>{
+    const sayiH=hucre(s,i+1), etiketH=hucre(s+1,i+1);
+    sayiH.value=k[0];
+    sayiH.font={bold:true,size:20,color:{argb:k[2]}};
+    sayiH.alignment={horizontal:'center',vertical:'middle'};
+    dolgu(sayiH,XL_RENK.zemin); kenar(sayiH);
+    etiketH.value=k[1];
+    etiketH.font={size:8,color:{argb:XL_RENK.gri}};
+    etiketH.alignment={horizontal:'center',vertical:'middle'};
+    dolgu(etiketH,XL_RENK.zemin); kenar(etiketH);
+  });
+  ws.getRow(s).height=28; ws.getRow(s+1).height=16; s+=3;
+
+  // ── Uyarı blokları ──
+  const uyariBlogu=(baslik,satirlar)=>{
+    if(!satirlar.length)return;
+    ws.mergeCells(s,1,s,6);
+    const c=hucre(s,1);
+    c.value=baslik;
+    c.font={bold:true,size:11,color:{argb:XL_RENK.uyariYazi}};
+    c.alignment={vertical:'middle',indent:1};
+    dolgu(c,XL_RENK.uyariZemin); kenar(c);
+    ws.getRow(s).height=20; s++;
+    satirlar.forEach(m=>{
+      ws.mergeCells(s,1,s,6);
+      const t=hucre(s,1);
+      t.value='   • '+m;
+      t.font={size:10,color:{argb:XL_RENK.uyariYazi}};
+      t.alignment={vertical:'middle'};
+      dolgu(t,XL_RENK.uyariZemin); kenar(t);
+      s++;
+    });
+    s++;
+  };
+  uyariBlogu('⚠  Tarihi geçmiş adımlar', gecikmis.map(a=>{
+    const k=urunKartlari.find(x=>x.id===a.kart_id);
+    return `${a.ad} — ${k?k.ad:''} · hedef ${xlTarih(a.tarih)}`;
+  }));
+  uyariBlogu('🤝  Onayınızı bekleyen adımlar', onayBekleyen.map(a=>{
+    const k=urunKartlari.find(x=>x.id===a.kart_id);
+    return `${a.ad} — ${k?k.ad:''}${a.tarih?' · hedef '+xlTarih(a.tarih):''}`;
+  }));
+
+  // ── Kart kart adım tabloları ──
+  ws.mergeCells(s,1,s,6);
+  const bl=hucre(s,1);
+  bl.value='Kartlar ve tüm adımlar';
+  bl.font={bold:true,size:13,color:{argb:XL_RENK.lacivert}};
+  ws.getRow(s).height=24; s+=1;
+
+  if(!kartIds.length){
+    ws.mergeCells(s,1,s,6);
+    hucre(s,1).value='Seçilen dönemde adım bulunamadı.';
+    hucre(s,1).font={italic:true,color:{argb:XL_RENK.gri}};
+    s++;
+  }
+
+  kartIds.forEach(id=>{
+    const k=urunKartlari.find(x=>x.id===id);
+    if(!k)return;
+    const hepsi=urunAdimlar.filter(a=>a.kart_id===id&&!a.arsivlendi).sort((a,b)=>a.sira-b.sira);
+    const tam=hepsi.filter(a=>a.durum==='Tamamlandı').length;
+    const pct=hepsi.length?Math.round(tam/hepsi.length*100):0;
+
+    // Kart başlığı
+    ws.mergeCells(s,1,s,6);
+    const kb=hucre(s,1);
+    kb.value=`${k.kod?k.kod+'   ':''}${k.ad}`;
+    kb.font={bold:true,size:12,color:{argb:XL_RENK.lacivert}};
+    kb.alignment={vertical:'middle',indent:1};
+    dolgu(kb,XL_RENK.zemin); kenar(kb);
+    ws.getRow(s).height=22; s++;
+
+    ws.mergeCells(s,1,s,6);
+    const ka=hucre(s,1);
+    ka.value=`${tam} / ${hepsi.length} adım tamamlandı · %${pct}   ·   Marka: ${k.marka||'—'}   ·   Durum: ${k.durum||'—'}`;
+    ka.font={size:9,color:{argb:XL_RENK.gri}};
+    ka.alignment={vertical:'middle',indent:1};
+    dolgu(ka,XL_RENK.zemin); kenar(ka);
+    s++;
+
+    // Tablo başlığı
+    ['#','ADIM','İŞ TÜRÜ','HEDEF TARİH','DURUM',''].forEach((baslik,i)=>{
+      const c=hucre(s,i+1);
+      c.value=baslik;
+      c.font={bold:true,size:9,color:{argb:XL_RENK.gri}};
+      c.alignment={horizontal:i===0?'center':'left',vertical:'middle'};
+      c.border={bottom:{style:'medium',color:{argb:XL_RENK.cizgi}}};
+    });
+    ws.getRow(s).height=18; s++;
+
+    hepsi.forEach(a=>{
+      const gecikti=a.tarih&&a.tarih<bugun&&a.durum!=='Tamamlandı';
+      const [zemin,yazi]=xlDurumBiciminden(a.durum);
+
+      const cNo=hucre(s,1);
+      cNo.value=a.sira;
+      cNo.alignment={horizontal:'center',vertical:'middle'};
+      cNo.font={size:10,color:{argb:XL_RENK.gri}};
+
+      const cAd=hucre(s,2);
+      cAd.value=a.ad+(a.musteri_adimi?'   (sizin onayınız)':'');
+      cAd.font={bold:true,size:10,color:{argb:a.musteri_adimi?XL_RENK.beklYazi:'FF1F2430'}};
+
+      hucre(s,3).value=a.is_turu||'—';
+      hucre(s,3).font={size:10,color:{argb:'FF5B6472'}};
+
+      const cTar=hucre(s,4);
+      cTar.value=xlTarih(a.tarih);
+      cTar.font={size:10,bold:gecikti,color:{argb:gecikti?XL_RENK.retYazi:'FF5B6472'}};
+
+      const cDur=hucre(s,5);
+      cDur.value=a.durum;
+      cDur.font={bold:true,size:9,color:{argb:yazi}};
+      cDur.alignment={horizontal:'center',vertical:'middle'};
+      dolgu(cDur,zemin);
+
+      for(let i=1;i<=5;i++)hucre(s,i).border={bottom:{style:'thin',color:{argb:XL_RENK.cizgi}}};
+      ws.getRow(s).height=17;
+      s++;
+    });
+    s++;   // kartlar arası boşluk
+  });
+
+  // ── Altbilgi ──
+  ws.mergeCells(s,1,s,6);
+  const alt=hucre(s,1);
+  alt.value=`Bu rapor ${xlTarih(today())} tarihinde Operasyon Paneli'nden alınmıştır · panel.lokasyonistanbul.com`;
+  alt.font={size:9,italic:true,color:{argb:XL_RENK.gri}};
+
+  const tampon=await wb.xlsx.writeBuffer();
+  const dosyaAdi=(!mrDurum.bas&&!mrDurum.bit)?'tumu':`${mrDurum.bas}_${mrDurum.bit}`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([tampon],
+    {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download=`Calisma-Raporu_${dosyaAdi}.xlsx`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+// Excel üretilemezse başvurulan yalın çıktı
 function mrCsvIndir(){
   const adimlar=mrAdimlar();
-  const satirlar=[['Tarih','Marka','Çalışma','Adım','Durum']];
+  const satirlar=[['Tarih','Marka','Çalışma','Adım','İş Türü','Durum']];
   adimlar.forEach(a=>{
     const k=urunKartlari.find(x=>x.id===a.kart_id);
-    satirlar.push([a.tarih||'',k?k.marka:'',k?k.ad:'',a.ad,a.durum]);
+    satirlar.push([a.tarih||'',k?k.marka:'',k?k.ad:'',a.ad,a.is_turu||'',a.durum]);
   });
   const ad=(!mrDurum.bas&&!mrDurum.bit)?'tumu':`${mrDurum.bas}_${mrDurum.bit}`;
   exportCSV(satirlar,`calisma-raporu_${ad}.csv`);
