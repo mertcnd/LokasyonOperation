@@ -2822,8 +2822,9 @@ let ozetOnizlemeHtml='';
 async function haftalikOnizle(marka){
   showLoading('Önizleme hazırlanıyor...');
   try{
+    // Fonksiyon kimlik doğruluyor; SBH() kullanıcının jetonunu ekler.
     const r=await fetch(`${SB_URL}/functions/v1/haftalik-ozet?onizleme=1&marka=${encodeURIComponent(marka)}`,
-      {headers:{'apikey':SB_KEY}});
+      {headers:SBH()});
     if(!r.ok)throw new Error('HTTP '+r.status);
     ozetOnizlemeHtml=await r.text();
     document.getElementById('ozet-onizleme-baslik').textContent=marka+' · haftalık özet önizlemesi';
@@ -4774,7 +4775,7 @@ async function sonrakiAdimBildir(tamamlananAdimId){
   try{
     const r=await fetch(`${SB_URL}/functions/v1/send-notification`,{
       method:'POST',
-      headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+      headers:SBH(),
       body:JSON.stringify({to:personel.email,subject,html})
     });
     if(!r.ok){

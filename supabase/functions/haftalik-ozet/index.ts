@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "onboarding@resend.dev"
 const REPLY_TO = Deno.env.get("REPLY_TO_EMAIL") || ""
@@ -26,6 +27,46 @@ const DURUM_ZEMIN: Record<string, string> = {
   "Devam Ediyor": "#e3f2fd",
   "Tamamlandı": "#e8f5e9",
   "RET": "#ffebee",
+}
+
+/*
+  GUVENLIK. Bu fonksiyonun iki cagirani var:
+   · pg_cron  -> "x-cron-anahtar" basligiyla (public.sistem_gizli tablosunda)
+   · panel    -> giris yapmis bir EKIP uyesinin jetonuyla (onizleme)
+  Onceden hicbiri aranmiyordu: URL'yi ve bir marka adini bilen herkes
+  "?onizleme=1&marka=X" ile o markanin tum operasyon ozetini indirebiliyordu.
+*/
+async function cronAnahtariGecerliMi(req: Request): Promise<boolean> {
+  const gelen = (req.headers.get("x-cron-anahtar") || "").trim()
+  if (!gelen) return false
+  const r = await fetch(`${SB_URL}/rest/v1/sistem_gizli?anahtar=eq.cron&select=deger`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+  })
+  if (!r.ok) return false
+  const satir = await r.json() as Array<{ deger?: string }>
+  const beklenen = satir[0]?.deger ?? ""
+  // Sabit sureli karsilastirma: uzunluk ayni degilse zaten esit degil
+  if (!beklenen || beklenen.length !== gelen.length) return false
+  let fark = 0
+  for (let i = 0; i < beklenen.length; i++) fark |= beklenen.charCodeAt(i) ^ gelen.charCodeAt(i)
+  return fark === 0
+}
+
+async function ekipUyesiMi(req: Request): Promise<boolean> {
+  const jeton = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim()
+  if (!jeton || jeton === ANON_KEY || jeton.startsWith("sb_publishable_")) return false
+  const r = await fetch(`${SB_URL}/auth/v1/user`, {
+    headers: { apikey: ANON_KEY, Authorization: `Bearer ${jeton}` },
+  })
+  if (!r.ok) return false
+  const u = await r.json() as { id?: string }
+  if (!u.id) return false
+  const p = await fetch(`${SB_URL}/rest/v1/kullanicilar?auth_uid=eq.${u.id}&select=rol`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+  })
+  if (!p.ok) return false
+  const satir = await p.json() as Array<{ rol?: string }>
+  return satir[0]?.rol === "admin" || satir[0]?.rol === "personel"
 }
 
 async function sbGet(table: string, query = "") {
@@ -200,6 +241,13 @@ serve(async (req) => {
   const url = new URL(req.url)
 
   try {
+    const cronMu = await cronAnahtariGecerliMi(req)
+    if (!cronMu && !await ekipUyesiMi(req)) {
+      return new Response(
+        JSON.stringify({ error: "Yetkisiz. Bu ozet yalnizca panele giris yapmis ekip uyelerine acik." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } })
+    }
+
     // ── ÖNİZLEME: mail atmadan HTML döndür ──
     if (url.searchParams.get("onizleme")) {
       const marka = url.searchParams.get("marka")
