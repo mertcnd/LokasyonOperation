@@ -155,9 +155,34 @@ create policy adimlar_oku on public.urun_adimlar
   for select to authenticated
   using (exists (select 1 from public.urun_kartlari k
                  where k.id = urun_adimlar.kart_id and public.marka_gorebilir(k.marka)));
-create policy adimlar_yaz on public.urun_adimlar
-  for all to authenticated
-  using (public.ekip_mi()) with check (public.ekip_mi());
+-- ── Adım sahipliği (14.08.2026'da eklendi) ──────────────────────────────
+-- Bir adıma yalnızca ATANAN kişi müdahale edebilir. Atanmamış adım ekipteki
+-- herkese açıktır; aksi hâlde kimse işi üstlenemezdi (116 adım atanmamış).
+-- Arayüzdeki karşılığı adimBenimMi(); ikisi birlikte anlam taşır.
+create or replace function public.aktif_personel_adi()
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce(nullif(p.ad,''), nullif(k.ad_soyad,''), k.kullanici_adi)
+  from public.kullanicilar k
+  left join public.personeller p on p.id = k.personel_id
+  where k.auth_uid = auth.uid() limit 1
+$$;
+revoke execute on function public.aktif_personel_adi() from anon, public;
+grant  execute on function public.aktif_personel_adi() to authenticated, service_role;
+
+create policy adimlar_ekle on public.urun_adimlar
+  for insert to authenticated
+  with check (public.ekip_mi());
+
+create policy adimlar_guncelle on public.urun_adimlar
+  for update to authenticated
+  using (public.yonetici_mi()
+      or (public.ekip_mi() and (coalesce(atanan,'')='' or atanan=public.aktif_personel_adi())))
+  with check (public.ekip_mi());
+
+create policy adimlar_sil on public.urun_adimlar
+  for delete to authenticated
+  using (public.yonetici_mi()
+      or (public.ekip_mi() and (coalesce(atanan,'')='' or atanan=public.aktif_personel_adi())));
 
 -- ─── 7. ADIM NOTLARI ────────────────────────────────────────────────────────
 -- Müşteri yalnızca KENDİ onay adımlarının notlarını görür; ekibin diğer

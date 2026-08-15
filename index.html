@@ -1115,6 +1115,25 @@ function adminMi(){ return !!aktifKullanici && aktifKullanici.rol==='admin'; }
   ikisi birlikte anlam taşır — tek başına arayüz kısıtı veriyi gizlemez.
 */
 function musteriMi(){ return !!aktifKullanici && aktifKullanici.rol==='musteri'; }
+/*
+  Adım sahipliği: bir adıma yalnızca ATANAN kişi müdahale edebilir.
+  · Yönetici her adıma müdahale eder.
+  · Atanmamış adım ekipteki herkese açıktır — aksi hâlde kimse işi üstlenemez.
+  · Kural veritabanında da uygulanıyor (sql/auth-rls.sql, adimlar_guncelle);
+    buradaki kontrol kullanıcıya sebebini göstermek içindir.
+*/
+function adimBenimMi(a){
+  if(!a)return false;
+  if(adminMi())return true;
+  if(musteriMi())return false;
+  if(!a.atanan)return true;
+  return a.atanan===aktifPersonelAdi();
+}
+function adimKilitUyari(a){
+  sbToast(a&&a.atanan
+    ? 'Bu adım '+a.atanan+' kişisine atanmış; yalnızca o kişi veya yönetici değiştirebilir.'
+    : 'Bu adımı değiştirme yetkiniz yok.');
+}
 // Müşterinin görebileceği sekmeler (rol seçilse bile başkası açılmaz).
 // Üçü de müşteri sürümüyle çalışır: Günlük Durum'da personel/süre sütunları,
 // Raporlama'da ajansın kapasite ve maliyet blokları gösterilmez.
@@ -1964,16 +1983,17 @@ function renderGorevler(){
       <td>${a.sure||0}</td>
       <td><span class="badge ${bdg}">${a.durum}</span></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <select onchange="adimDurumDegistirGunluk('${a.id}',this.value)" style="border:1px solid ${a.durum==='RET'?'#e53935':'#ddd'};border-radius:4px;padding:3px 6px;font-size:11px;color:${a.durum==='RET'?'#c62828':'inherit'};font-weight:${a.durum==='RET'?'700':'400'}">
+        <select${adimBenimMi(a)?'':' disabled title="Bu adım size atanmamış"'} onchange="adimDurumDegistirGunluk('${a.id}',this.value)" style="border:1px solid ${a.durum==='RET'?'#e53935':'#ddd'};border-radius:4px;padding:3px 6px;font-size:11px;color:${a.durum==='RET'?'#c62828':'inherit'};font-weight:${a.durum==='RET'?'700':'400'}">
           ${['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
         </select>
-        <button onclick="event.stopPropagation();arsivGonder('${a.id}')" title="Arşive Gönder" style="background:#ff8f00;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px">📦</button>
+        <button${adimBenimMi(a)?'':' disabled'} onclick="event.stopPropagation();arsivGonder('${a.id}')" title="Arşive Gönder" style="background:#ff8f00;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px">📦</button>
       </td>
     </tr>`;
   }).join('');
 }
 async function adimDurumDegistirGunluk(id,val){
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
+  if(!adimBenimMi(a)){adimKilitUyari(a);renderGorevler();return;}
   a.durum=val;
   renderGorevler();
   await sbPatch('urun_adimlar','id',id,{durum:val});
@@ -2895,6 +2915,7 @@ function renderArsiv(){
   </tr>`).join('');
 }
 async function arsivGonder(id){
+  {const a=urunAdimlar.find(x=>x.id===id); if(a&&!adimBenimMi(a)){adimKilitUyari(a);return;}}
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
   if(!confirm('"'+a.ad+'" adımı arşive gönderilecek. Onaylıyor musunuz?'))return;
   a.arsivlendi=true;
@@ -2905,6 +2926,7 @@ async function arsivGonder(id){
   await sbPatch('urun_adimlar','id',id,{arsivlendi:true});
 }
 async function arsivdenCek(id){
+  {const a=urunAdimlar.find(x=>x.id===id); if(a&&!adimBenimMi(a)){adimKilitUyari(a);return;}}
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
   a.arsivlendi=false;
   renderArsiv();
@@ -4151,6 +4173,8 @@ function renderDetayAdimlar(){
     return;
   }
   const adimKarti=(a)=>{
+    const kilitli=!adimBenimMi(a);            // başkasına atanmış adım
+    const kilitAttr=kilitli?' disabled title="Bu adım '+(a.atanan||'')+' kişisine atanmış"':'';
     const col=durumRenk[a.durum]||'#9e9e9e';
     const bdg=bdgMap[a.durum]||'badge-bek';
     const ret=a.durum==='RET';   // RET: adım baştan aşağı kırmızı vurgulanır
@@ -4174,38 +4198,41 @@ function renderDetayAdimlar(){
         </div>
         ${a.arsivlendi
           ? `<button onclick="event.stopPropagation();arsivdenCek('${a.id}')" title="Bu adımı arşivden çıkar" style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer;width:100%">↩ Geri Al</button>`
-          : `<select onclick="event.stopPropagation()" onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid ${ret?'#e53935':'#ddd'};border-radius:6px;padding:5px 8px;font-size:11px;background:#fff;width:100%;color:${ret?'#c62828':'inherit'};font-weight:${ret?'700':'400'}">
+          : `<select onclick="event.stopPropagation()"${kilitAttr} onchange="adimDurumDegistir('${a.id}',this.value)" style="border:1px solid ${ret?'#e53935':'#ddd'};border-radius:6px;padding:5px 8px;font-size:11px;background:${kilitli?'#f4f6fb':'#fff'};width:100%;color:${ret?'#c62828':(kilitli?'#98a0b0':'inherit')};font-weight:${ret?'700':'400'};cursor:${kilitli?'not-allowed':'pointer'}">
           ${['Bekliyor','Devam Ediyor','Tamamlandı','RET'].map(d=>`<option${a.durum===d?' selected':''}>${d}</option>`).join('')}
         </select>`}
         <div style="display:flex;flex-direction:column;gap:1px" onclick="event.stopPropagation()">
-          <button onclick="adimTasi('${a.id}',-1)" title="Yukarı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▲</button>
-          <button onclick="adimTasi('${a.id}',1)" title="Aşağı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▼</button>
+          <button${kilitAttr} onclick="adimTasi('${a.id}',-1)" title="Yukarı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▲</button>
+          <button${kilitAttr} onclick="adimTasi('${a.id}',1)" title="Aşağı taşı" style="background:#f0f3f8;border:none;border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:#555;line-height:1.4">▼</button>
         </div>
         <div style="color:#bbb;font-size:11px;text-align:center">${isExpanded?'▲':'▼'}</div>
       </div>
       ${isExpanded?`<div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 16px">
+        ${kilitli?`<div style="background:#eef1f7;border-left:3px solid #98a0b0;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#5b6472">
+          🔒 Bu adım <b>${kacir(a.atanan||'—')}</b> kişisine atanmış. Yalnızca o kişi veya yönetici değiştirebilir; notlar herkese açıktır.
+        </div>`:''}
         <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.3fr;gap:12px;margin-bottom:14px">
           <div>
             <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">👤 Atanan Personel</div>
-            <select onclick="event.stopPropagation()" onchange="adimAlanGuncelle('${a.id}','atanan',this.value)" style="width:100%;border:1.5px solid ${a.atanan?'#d0d7e3':'#ff8f00'};border-radius:6px;padding:7px 10px;font-size:12px;background:#fff">
+            <select onclick="event.stopPropagation()"${kilitAttr} onchange="adimAlanGuncelle('${a.id}','atanan',this.value)" style="width:100%;border:1.5px solid ${a.atanan?'#d0d7e3':'#ff8f00'};border-radius:6px;padding:7px 10px;font-size:12px;background:#fff">
               <option value="">— Atanmamış —</option>
               ${personeller.map(p=>`<option${a.atanan===p.ad?' selected':''}>${kacir(p.ad)}</option>`).join('')}
             </select>
           </div>
           <div>
             <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">📅 Hedef Tarih</div>
-            <input type="date" value="${a.tarih||''}" onclick="event.stopPropagation()" onchange="adimAlanGuncelle('${a.id}','tarih',this.value)" style="width:100%;border:1.5px solid ${a.tarih?'#d0d7e3':'#ff8f00'};border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
+            <input type="date" value="${a.tarih||''}" onclick="event.stopPropagation()"${kilitAttr} onchange="adimAlanGuncelle('${a.id}','tarih',this.value)" style="width:100%;border:1.5px solid ${a.tarih?'#d0d7e3':'#ff8f00'};border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
           </div>
           <div>
             <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">⚡ Zorluk</div>
-            <select onclick="event.stopPropagation()" onchange="adimZorlukGuncelle('${a.id}',this.value)" style="width:100%;border:1.5px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:12px;background:#fff">
+            <select onclick="event.stopPropagation()"${kilitAttr} onchange="adimZorlukGuncelle('${a.id}',this.value)" style="width:100%;border:1.5px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:12px;background:#fff">
               ${['Basit','Normal','Kompleks'].map(z=>`<option${(a.zorluk||'Normal')===z?' selected':''}>${z}</option>`).join('')}
             </select>
           </div>
           <div>
             <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">🤝 Onay</div>
             <label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:7px;font-size:12px;background:${a.musteri_adimi?'#fff3e0':'#fff'};border:1.5px solid ${a.musteri_adimi?'#ffb74d':'#d0d7e3'};border-radius:6px;padding:7px 10px;cursor:pointer;user-select:none">
-              <input type="checkbox" ${a.musteri_adimi?'checked':''} onchange="adimMusteriToggle('${a.id}',this.checked)" style="cursor:pointer">
+              <input type="checkbox" ${a.musteri_adimi?'checked':''}${kilitAttr} onchange="adimMusteriToggle('${a.id}',this.checked)" style="cursor:pointer">
               <span style="color:${a.musteri_adimi?'#e65100':'#555'};font-weight:${a.musteri_adimi?'700':'400'}">Müşteri onaylar</span>
             </label>
           </div>
@@ -4213,13 +4240,13 @@ function renderDetayAdimlar(){
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
           <div id="adim-timer-disp-${a.id}" style="font-size:20px;font-weight:700;color:#1565c0;min-width:90px;font-variant-numeric:tabular-nums">${timerTxt}</div>
           ${isRunning
-            ?`<button onclick="adimTimerDurdur('${a.id}')" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">⏸ Durdur</button>`
-            :`<button onclick="adimTimerBaslat('${a.id}')" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">▶ Başlat</button>`}
+            ?`<button${kilitAttr} onclick="adimTimerDurdur('${a.id}')" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">⏸ Durdur</button>`
+            :`<button${kilitAttr} onclick="adimTimerBaslat('${a.id}')" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">▶ Başlat</button>`}
           <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
             <span style="font-size:11px;color:#888">Fiili toplam:</span>
-            <input type="number" id="adim-fiili-inp-${a.id}" value="${a.gercek_sure||0}" min="0" onclick="event.stopPropagation()" style="width:70px;border:1px solid #d0d7e3;border-radius:6px;padding:5px 8px;font-size:12px;text-align:right">
+            <input type="number" id="adim-fiili-inp-${a.id}" value="${a.gercek_sure||0}" min="0" onclick="event.stopPropagation()"${kilitAttr} style="width:70px;border:1px solid #d0d7e3;border-radius:6px;padding:5px 8px;font-size:12px;text-align:right">
             <span style="font-size:11px;color:#888">dk</span>
-            <button onclick="adimFiiliKaydet('${a.id}')" style="background:#1565c0;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer">Kaydet</button>
+            <button${kilitAttr} onclick="adimFiiliKaydet('${a.id}')" style="background:#1565c0;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer">Kaydet</button>
           </div>
         </div>
         <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:8px">📝 Notlar (${notlar.length})</div>
@@ -4230,7 +4257,7 @@ function renderDetayAdimlar(){
           <input type="text" id="adim-not-inp-${a.id}" placeholder="Not ekle..." style="flex:1;border:1px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:12px;outline:none">
           <button onclick="adimNotEkle('${a.id}')" style="background:#1565c0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer">Ekle</button>
         </div>
-        <div style="display:flex;gap:8px"><button onclick="${a.arsivlendi?'arsivdenCek':'arsivGonder'}('${a.id}')" style="background:none;border:1px solid #ff8f00;color:#ff8f00;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">${a.arsivlendi?'↩ Arşivden Çek':'📦 Arşive Gönder'}</button><button onclick="adimSil('${a.id}')" style="background:none;border:1px solid #e53935;color:#e53935;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">🗑 Adımı Sil</button></div>
+        <div style="display:flex;gap:8px"><button${kilitAttr} onclick="${a.arsivlendi?'arsivdenCek':'arsivGonder'}('${a.id}')" style="background:none;border:1px solid #ff8f00;color:#ff8f00;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">${a.arsivlendi?'↩ Arşivden Çek':'📦 Arşive Gönder'}</button><button${kilitAttr} onclick="adimSil('${a.id}')" style="background:none;border:1px solid #e53935;color:#e53935;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">🗑 Adımı Sil</button></div>
       </div>`:''}
     </div>`;
   };
@@ -4431,6 +4458,7 @@ async function adimEkle(){
   }
 }
 async function adimSil(id){
+  {const a=urunAdimlar.find(x=>x.id===id); if(a&&!adimBenimMi(a)){adimKilitUyari(a);return;}}
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
   if(!confirm(`"${kacir(a.ad)}" adımı silinecek. Emin misiniz?`))return;
   // Clear timer
@@ -4442,6 +4470,7 @@ async function adimSil(id){
 }
 async function adimDurumDegistir(id,val){
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
+  if(!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}
   a.durum=val;
   if(val==='Tamamlandı'){
     // Stop timer if running
@@ -4485,6 +4514,7 @@ async function adimNotEkle(adimId){
 
 // ── Step timers (localStorage) ─────────────────────────────────────────────
 function adimTimerBaslat(adimId){
+  {const a=urunAdimlar.find(x=>x.id===adimId); if(a&&!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}}
   if(adimTimerStates[adimId]?.running)return;
   const saved=adimTimerGetSaved(adimId);
   const acc=saved?saved.acc:0;
@@ -4495,6 +4525,7 @@ function adimTimerBaslat(adimId){
   renderDetayAdimlar();
 }
 async function adimTimerDurdur(adimId){
+  {const a=urunAdimlar.find(x=>x.id===adimId); if(a&&!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}}
   const ts=adimTimerStates[adimId];if(!ts||!ts.running)return;
   clearInterval(ts.interval);
   const elapsed=ts.acc+Math.floor((Date.now()-ts.startTs)/1000);
@@ -4505,6 +4536,7 @@ async function adimTimerDurdur(adimId){
   renderDetayAdimlar();
 }
 async function adimTasi(adimId,yon){
+  {const a=urunAdimlar.find(x=>x.id===adimId); if(a&&!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}}
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
   const liste=urunAdimlar.filter(x=>x.kart_id===a.kart_id).sort((x,y)=>x.sira-y.sira);
   const i=liste.findIndex(x=>x.id===adimId);
@@ -4524,6 +4556,7 @@ async function adimTasi(adimId,yon){
   }
 }
 async function adimZorlukGuncelle(adimId,zorluk){
+  {const a=urunAdimlar.find(x=>x.id===adimId); if(a&&!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}}
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
   a.zorluk=zorluk;
   // İdeal süreyi İş Türü Yönetimi'nden yeni zorluğa göre çek
@@ -4541,6 +4574,7 @@ async function adimZorlukGuncelle(adimId,zorluk){
 }
 async function adimAlanGuncelle(adimId,alan,deger){
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
+  if(!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}
   a[alan]=deger;
   renderDetayAdimlar();
   renderGorevler();
@@ -4551,12 +4585,14 @@ async function adimAlanGuncelle(adimId,alan,deger){
 // kullanıcısı görür ve onaylar; ekip bu adımın durumunu yine değiştirebilir.
 async function adimMusteriToggle(adimId,secili){
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
+  if(!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}
   a.musteri_adimi=!!secili;
   renderDetayAdimlar();
   await sbPatch('urun_adimlar','id',adimId,{musteri_adimi:!!secili});
   sbToast(secili?'✔ "'+a.ad+'" artık müşteri onay adımı':'"'+a.ad+'" müşteri onayından çıkarıldı');
 }
 async function adimFiiliKaydet(adimId){
+  {const a=urunAdimlar.find(x=>x.id===adimId); if(a&&!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}}
   const inp=document.getElementById('adim-fiili-inp-'+adimId);
   if(!inp)return;
   const dk=parseInt(inp.value);
