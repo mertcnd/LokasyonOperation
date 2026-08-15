@@ -4652,7 +4652,6 @@ function renderKartDokumanlari(kartId){
     return;
   }
   cont.innerHTML=docs.map(d=>{
-    const url=`${SB_URL}/storage/v1/object/public/urun-dokumanlari/${d.dosya_yolu}`;
     const ikon=dosyaIkon(d.dosya_turu);
     const boyut=dosyaBoyut(d.boyut_kb||0);
     const safeAdi=d.dosya_adi.replace(/'/g,"\'");
@@ -4667,7 +4666,7 @@ function renderKartDokumanlari(kartId){
         const renk=s.acik>0?'#ffebee':'#ede7f6',yazi=s.acik>0?'#c62828':'#5e35b1';
         return `<button onclick="dokumanNotAc('${d.id}')" title="Belge üzerine not / işaretleme" style="background:${renk};color:${yazi};border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📝 Notlar${s.acik>0?' ('+s.acik+')':''}</button>`;
       })():''}
-      <a href="${url}" target="_blank" download="${kacir(d.dosya_adi)}" style="background:#e3f2fd;color:#1565c0;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;flex-shrink:0">⬇ İndir</a>
+      <button onclick="dokumanIndir('${jsKacir(d.id)}')" style="background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">⬇ İndir</button>
       ${musteriMi()?'':`<button onclick="dosyaSil('${d.id}','${d.dosya_yolu}','${safeAdi}')" style="background:#fce4ec;color:#c62828;border:none;border-radius:6px;padding:5px 10px;font-size:14px;cursor:pointer;flex-shrink:0" title="Sil">🗑</button>`}
     </div>`;
   }).join('');
@@ -4700,8 +4699,7 @@ async function dosyaYukle(kartId,file){
     const r=await fetch(SB_URL+'/storage/v1/object/urun-dokumanlari/'+yolu,{
       method:'POST',
       headers:{
-        'apikey':SB_KEY,
-        'Authorization':'Bearer '+SB_KEY,
+        ...SBH(),
         'Content-Type':file.type||'application/octet-stream',
         'x-upsert':'true'
       },
@@ -4722,12 +4720,21 @@ async function dosyaYukle(kartId,file){
   await sbPost('urun_dokumanlari',meta);
 }
 
+// İndirme: bağlantı tıklama anında üretilir, 1 saat sonra kendiliğinden ölür.
+async function dokumanIndir(id){
+  const d=(kartDokumanlari[aktifKartId]||[]).find(x=>x.id===id);
+  if(!d)return;
+  try{
+    const url=await imzaliDokumanUrl(d.dosya_yolu);
+    window.open(url,'_blank','noopener');
+  }catch(e){ sbToast(e.message); }
+}
 async function dosyaSil(id,dosyaYolu,dosyaAdi){
   if(!confirm('"'+dosyaAdi+'" silinecek. Emin misiniz?'))return;
   try{
     const encodedYolu=dosyaYolu.split('/').map(s=>encodeURIComponent(s)).join('/');
     await fetch(`${SB_URL}/storage/v1/object/urun-dokumanlari/${encodedYolu}`,{
-      method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}
+      method:'DELETE',headers:SBH()
     });
   }catch(e){console.warn('Storage delete:',e);}
   if(kartDokumanlari[aktifKartId])kartDokumanlari[aktifKartId]=kartDokumanlari[aktifKartId].filter(d=>d.id!==id);
@@ -4811,7 +4818,28 @@ function dnotSilebilirMi(n){return adminMi()||(!!n.yazan&&n.yazan===todoSahipAdi
 function dnotYazanFiltresi(){
   return musteriMi()?('&yazan=eq.'+encodeURIComponent(todoSahipAdi())):'';
 }
-function dnotStorageUrl(d){return `${SB_URL}/storage/v1/object/public/urun-dokumanlari/${d.dosya_yolu.split('/').map(encodeURIComponent).join('/')}`}
+/*
+  Doküman erişimi imzalı (süreli) bağlantıyla yapılır.
+
+  Kova artık public değil: eskiden dosya yolunu bilen herkes, hiç giriş
+  yapmadan müşteri ambalaj çalışmalarını indirebiliyordu ve verilen her
+  bağlantı sonsuza kadar geçerliydi. Şimdi bağlantıyı Storage üretiyor,
+  kullanıcının kendi jetonuyla ve 1 saatlik ömürle — yetkisi olmayan
+  kullanıcı için Storage zaten bağlantı üretmiyor.
+*/
+async function imzaliDokumanUrl(dosyaYolu,saniye=3600){
+  const yol=String(dosyaYolu||'').split('/').map(encodeURIComponent).join('/');
+  const r=await fetch(`${SB_URL}/storage/v1/object/sign/urun-dokumanlari/${yol}`,{
+    method:'POST',headers:SBH(),body:JSON.stringify({expiresIn:saniye})
+  });
+  if(!r.ok){
+    const h=await r.text();
+    throw new Error('Dosya bağlantısı alınamadı ('+r.status+'). '+h.slice(0,120));
+  }
+  const j=await r.json();
+  return SB_URL+'/storage/v1'+(j.signedURL||j.signedUrl);
+}
+async function dnotStorageUrl(d){ return imzaliDokumanUrl(d.dosya_yolu); }
 
 async function dokumanNotAc(dokumanId){
   const d=(kartDokumanlari[aktifKartId]||[]).find(x=>x.id===dokumanId);
@@ -4824,7 +4852,7 @@ async function dokumanNotAc(dokumanId){
   dnotAraclariCiz();
   showLoading('Doküman açılıyor...');
   try{
-    const url=dnotStorageUrl(d);
+    const url=await dnotStorageUrl(d);
     if((d.dosya_turu||'').toLowerCase()==='pdf'){
       if(!window.pdfjsLib)throw new Error('PDF kütüphanesi yüklenemedi. Sayfayı yenileyin.');
       const r=await fetch(url);
