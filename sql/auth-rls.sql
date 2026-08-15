@@ -286,3 +286,44 @@ create policy kullanici_yonet on public.kullanicilar
 --    end loop;
 --  end $$;
 --  (sonra index.html içinde AUTH_MODU = false)
+
+-- ============================================================================
+--  STORAGE — 15.08.2026'da uygulandı (yukarıdaki "ayrıca yapılacak" notu artık geçersiz)
+-- ============================================================================
+-- Kova public'ti ve storage.objects politikaları YALNIZCA anon içindi:
+-- okuma, yazma ve SİLME. Yani yayın anahtarını bilen biri bütün müşteri
+-- çalışmalarını indirebilir ya da silebilirdi.
+
+create policy "ekip dokuman okur" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'urun-dokumanlari' and public.ekip_mi());
+
+-- Dosya yolu "<kart_id>/<zaman>_<ad>"; kart kimliği ilk parçadan çıkarılır.
+create policy "musteri kendi markasinin dokumanini okur" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'urun-dokumanlari'
+         and public.kart_gorunur(split_part(name, '/', 1)));
+
+create policy "ekip dokuman yukler" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'urun-dokumanlari' and public.ekip_mi());
+
+create policy "ekip dokuman gunceller" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'urun-dokumanlari' and public.ekip_mi())
+  with check (bucket_id = 'urun-dokumanlari' and public.ekip_mi());
+
+create policy "ekip dokuman siler" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'urun-dokumanlari' and public.ekip_mi());
+
+drop policy if exists "Allow anon reads urun-dokumanlari"   on storage.objects;
+drop policy if exists "Allow anon uploads urun-dokumanlari" on storage.objects;
+drop policy if exists "Allow anon updates urun-dokumanlari" on storage.objects;
+drop policy if exists "Allow anon deletes urun-dokumanlari" on storage.objects;
+
+update storage.buckets set public = false where id = 'urun-dokumanlari';
+
+-- Sıra önemli: önce yetkili politikalar eklenir, sonra panel imzalı bağlantıya
+-- geçirilip yayına alınır, en son anon politikaları düşürülüp kova kapatılır.
+-- Ters sırada bütün dokümanlar erişilemez hale gelirdi.
