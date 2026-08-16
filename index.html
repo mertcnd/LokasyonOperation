@@ -823,6 +823,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">
         <div class="card-title" style="margin:0">🔐 Giriş Kayıtları</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div><div class="lbl">Rol</div><select id="vg-rol" onchange="renderGirisKayitlari()"><option value="">Tümü</option><option value="musteri">Yalnızca müşteriler</option><option value="personel">Personel</option><option value="admin">Yönetici</option></select></div>
           <div><div class="lbl">Kullanıcı</div><select id="vg-kullanici" onchange="renderGirisKayitlari()"><option value="">Tümü</option></select></div>
           <div><div class="lbl">Başlangıç</div><input type="date" id="vg-bas" onchange="renderGirisKayitlari()"></div>
           <div><div class="lbl">Bitiş</div><input type="date" id="vg-bit" onchange="renderGirisKayitlari()"></div>
@@ -1437,6 +1438,18 @@ function cihazAdi(ua){
                  :/Linux/.test(u)?'Linux':'';
   return sistem?tarayici+' · '+sistem:tarayici;
 }
+/*
+  Giriş kaydındaki marka bilgisi. Müşteri hesaplarında asıl ayırt edici bilgi
+  budur: "Esin Yıldız" tek başına hangi müşteri olduğunu söylemiyor.
+  Personelde marka kısıtı varsa o da gösterilir; kısıt yoksa "tüm markalar".
+*/
+function girisMarkaEtiketi(g){
+  let liste=[];
+  try{ const d=JSON.parse(g.markalar||'[]'); if(Array.isArray(d))liste=d; }catch(e){}
+  if(g.rol==='admin')return '';
+  if(!liste.length)return g.rol==='musteri'?'⚠ marka atanmamış':'';
+  return liste.join(', ');
+}
 function zamanTR(iso){
   if(!iso)return '—';
   const d=new Date(iso);
@@ -1479,10 +1492,11 @@ function renderGirisKayitlari(){
 
   aktifKutu.innerHTML=!aktifOturumlar.length?bos('Açık oturum yok.')
     :`<div style="overflow-x:auto"><table class="tbl">
-        <thead><tr><th>Kişi</th><th>Rol</th><th>Giriş</th><th>Son etkinlik</th><th>IP</th><th>Cihaz</th></tr></thead>
+        <thead><tr><th>Kişi</th><th>Rol</th><th>Marka</th><th>Giriş</th><th>Son etkinlik</th><th>IP</th><th>Cihaz</th></tr></thead>
         <tbody>${aktifOturumlar.map(o=>`<tr>
           <td><strong>${kacir(o.ad_soyad||o.kullanici_adi||'—')}</strong></td>
-          <td>${kacir(rolEtiketi(o.rol))}</td>
+          <td><span class="badge ${o.rol==='musteri'?'badge-bek':'badge-dev'}" style="font-size:10px">${kacir(rolEtiketi(o.rol))}</span></td>
+          <td style="font-size:11px;color:#555;max-width:190px">${kacir(girisMarkaEtiketi(o))||'—'}</td>
           <td style="white-space:nowrap">${zamanTR(o.baslangic)}</td>
           <td style="white-space:nowrap;color:#2e7d32">${gecenSure(o.son_etkinlik)}</td>
           <td style="font-family:monospace;font-size:11px">${kacir(o.ip||'—')}</td>
@@ -1492,9 +1506,11 @@ function renderGirisKayitlari(){
   const fk=document.getElementById('vg-kullanici')?.value||'';
   const fb=document.getElementById('vg-bas')?.value||'';
   const fs2=document.getElementById('vg-bit')?.value||'';
+  const fr=document.getElementById('vg-rol')?.value||'';
   const liste=girisKayitlari.filter(g=>{
     const ad=g.ad_soyad||g.kullanici_adi||'';
     if(fk&&ad!==fk)return false;
+    if(fr&&g.rol!==fr)return false;
     const gun=(g.giris_at||'').slice(0,10);
     if(fb&&gun<fb)return false;
     if(fs2&&gun>fs2)return false;
@@ -1504,11 +1520,12 @@ function renderGirisKayitlari(){
   gecmisKutu.innerHTML=!liste.length?bos('Seçili aralıkta giriş kaydı yok.')
     :`<div style="font-size:12px;color:#888;margin-bottom:8px">${liste.length} giriş</div>
       <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="tbl">
-        <thead><tr><th>Kişi</th><th>Rol</th><th>Tarih / Saat</th><th>IP</th><th>Cihaz</th></tr></thead>
+        <thead><tr><th>Kişi</th><th>Rol</th><th>Marka</th><th>Tarih / Saat</th><th>IP</th><th>Cihaz</th></tr></thead>
         <tbody>${liste.map(g=>`<tr>
           <td><strong>${kacir(g.ad_soyad||g.kullanici_adi||'(silinmiş hesap)')}</strong>
               ${g.email?`<div style="font-size:10px;color:#aaa">${kacir(g.email)}</div>`:''}</td>
-          <td>${kacir(rolEtiketi(g.rol))}</td>
+          <td><span class="badge ${g.rol==='musteri'?'badge-bek':'badge-dev'}" style="font-size:10px">${kacir(rolEtiketi(g.rol))}</span></td>
+          <td style="font-size:11px;color:#555;max-width:190px">${kacir(girisMarkaEtiketi(g))||'—'}</td>
           <td style="white-space:nowrap">${zamanTR(g.giris_at)}</td>
           <td style="font-family:monospace;font-size:11px">${kacir(g.ip||'—')}</td>
           <td style="font-size:11px;color:#666">${kacir(cihazAdi(g.tarayici))}</td>

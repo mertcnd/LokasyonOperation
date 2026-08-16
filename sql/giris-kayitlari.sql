@@ -16,6 +16,7 @@ create table if not exists public.giris_kayitlari (
   ad_soyad      text,
   email         text,
   rol           text,
+  markalar      text,   -- müşteride asıl ayırt edici bilgi: kimin adına girdi
   giris_at      timestamptz not null default now(),
   ip            text,
   tarayici      text
@@ -43,8 +44,8 @@ create or replace function public.giris_kaydet()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   begin
-    insert into public.giris_kayitlari (auth_uid, kullanici_adi, ad_soyad, email, rol, giris_at, ip, tarayici)
-    select new.user_id, k.kullanici_adi, k.ad_soyad, k.email, k.rol,
+    insert into public.giris_kayitlari (auth_uid, kullanici_adi, ad_soyad, email, rol, markalar, giris_at, ip, tarayici)
+    select new.user_id, k.kullanici_adi, k.ad_soyad, k.email, k.rol, k.markalar,
            coalesce(new.created_at, now()), host(new.ip), left(new.user_agent, 400)
     from public.kullanicilar k
     where k.auth_uid = new.user_id;
@@ -73,13 +74,15 @@ left join public.kullanicilar k on k.auth_uid = s.user_id;
 -- ── Şu an açık oturumlar ────────────────────────────────────────────────────
 -- auth şeması PostgREST'e kapalı; panele fonksiyon üzerinden açılıyor.
 -- Yönetici değilse sorgu boş döner (WHERE içindeki yonetici_mi()).
-create or replace function public.aktif_oturumlar()
+-- Dönüş tipi değiştiğinde önce düşürülmeli (CREATE OR REPLACE yetmez)
+drop function if exists public.aktif_oturumlar();
+create function public.aktif_oturumlar()
 returns table (
-  kullanici_adi text, ad_soyad text, email text, rol text,
+  kullanici_adi text, ad_soyad text, email text, rol text, markalar text,
   baslangic timestamptz, son_etkinlik timestamptz, ip text, tarayici text
 )
 language sql stable security definer set search_path = public as $$
-  select k.kullanici_adi, k.ad_soyad, k.email, k.rol,
+  select k.kullanici_adi, k.ad_soyad, k.email, k.rol, k.markalar,
          s.created_at, coalesce(s.refreshed_at, s.updated_at, s.created_at),
          host(s.ip), left(s.user_agent, 400)
   from auth.sessions s
