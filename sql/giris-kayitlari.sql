@@ -93,3 +93,20 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.aktif_oturumlar() from anon, public;
 grant  execute on function public.aktif_oturumlar() to authenticated;
+
+-- ── Kayıt öncesi girişlerin telafisi (16.08.2026) ───────────────────────────
+-- Yukarıdaki doldurma auth.sessions'tan okuyor, yani yalnızca HÂLÂ AÇIK
+-- oturumları yakalıyor. Mekanizma kurulmadan önce girip çıkan kullanıcılar
+-- (çıkış oturum satırını sildiği için) dışarıda kalmıştı.
+-- auth.users.last_sign_in_at o girişi tutuyor; IP ve cihaz orada yok.
+insert into public.giris_kayitlari (auth_uid, kullanici_adi, ad_soyad, email, rol, markalar, giris_at, ip, tarayici)
+select u.id, k.kullanici_adi, k.ad_soyad, k.email, k.rol, k.markalar,
+       u.last_sign_in_at, null, null
+from auth.users u
+join public.kullanicilar k on k.auth_uid = u.id
+where u.last_sign_in_at is not null
+  and not exists (
+    select 1 from public.giris_kayitlari g
+    where g.auth_uid = u.id
+      and abs(extract(epoch from (g.giris_at - u.last_sign_in_at))) < 120
+  );
