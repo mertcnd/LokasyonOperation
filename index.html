@@ -775,12 +775,18 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
         <div><div class="lbl">Adım Adı</div><input type="text" id="adim-ad" placeholder="Örn: Preflight"></div>
         <div><div class="lbl">İş Türü</div><select id="adim-isturi" onchange="adimAutoFillSure()"><option value="">Seçin...</option></select></div>
         <div><div class="lbl">Zorluk</div><select id="adim-zorluk" onchange="adimAutoFillSure()"><option selected>Normal</option><option>Basit</option><option>Kompleks</option></select></div>
-        <div><div class="lbl">Personel</div><select id="adim-atanan"><option value="">Seçin...</option></select></div>
-        <div><div class="lbl">Tarih</div><input type="date" id="adim-tarih"></div>
-        <div><div class="lbl">Süre (dk)</div><input type="number" id="adim-sure" placeholder="dk" min="1"></div>
+        <div><div class="lbl">Personel</div><select id="adim-atanan" onchange="adimTarihOner(true)"><option value="">Seçin...</option></select></div>
+        <div><div class="lbl">Tarih</div>
+          <div style="display:flex;gap:4px">
+            <input type="date" id="adim-tarih" style="flex:1">
+            <button onclick="adimTarihOner(true)" title="Personelin takvimine göre ilk uygun günü öner" style="background:#eef1f7;border:1.5px solid #d0d7e3;border-radius:6px;padding:0 8px;font-size:13px;cursor:pointer">🎯</button>
+          </div>
+        </div>
+        <div><div class="lbl">Süre (dk)</div><input type="number" id="adim-sure" placeholder="dk" min="1" onchange="adimTarihOner(false)"></div>
         <div><div class="lbl">Sıra</div><select id="adim-sira-sec"><option value="">En sona</option></select></div>
         <div><button class="btn btn-full" onclick="adimEkle()">Ekle</button></div>
       </div>
+      <div id="adim-tarih-ipucu" style="font-size:11px;color:#5b6472;margin-top:8px;min-height:15px"></div>
     </div>
   </div>
 </div>
@@ -3019,6 +3025,64 @@ async function markaSil(ad){
 }
 
 // --- ADIM AUTO-FILL (İş Türü + Zorluk → süre otomatik) ---
+/*
+  TARİH ÖNERİSİ — atanan personelin takvim doluluğuna göre.
+
+  Bir günün boş kapasitesi = o günün mesaisi (hafta sonu 0, resmî tatil 0,
+  arife yarım) − o gün için girilmiş izin − o güne atanmış tamamlanmamış
+  adımların süresi − aynı kişinin Günlük Durum görevleri.
+
+  İş, süresinin sığdığı ilk güne önerilir. Öneri yalnızca öneridir: tarih
+  alanı normal bir girdi, kullanıcı istediğini yazar.
+*/
+function personelBosKapasite(personelAdi,gun){
+  const mesai=gunlukMesaiDk(gun);
+  if(!mesai)return 0;                       // hafta sonu / tam gün tatil
+  const izin=izinler
+    .filter(i=>i.personel===personelAdi&&i.tarih===gun)
+    .reduce((t,i)=>t+(parseInt(i.sure)||0),0);
+  const adimYuku=urunAdimlar
+    .filter(a=>!a.arsivlendi&&a.atanan===personelAdi&&a.tarih===gun&&a.durum!=='Tamamlandı')
+    .reduce((t,a)=>t+(parseInt(a.sure)||0),0);
+  const gorevYuku=gorevler
+    .filter(g=>!g.arsivlendi&&g.personel===personelAdi&&g.tarih===gun&&g.durum!=='Tamamlandı')
+    .reduce((t,g)=>t+(parseInt(g.sure)||0),0);
+  return Math.max(0,mesai-izin-adimYuku-gorevYuku);
+}
+function ilkUygunGun(personelAdi,sureDk,baslangic){
+  if(!personelAdi)return null;
+  // Bir günden uzun işler zaten tek güne sığmaz; o gün başlayabilmesi yeterli
+  const gereken=Math.min(Math.max(parseInt(sureDk)||0,1),GUNLUK_MESAI_DK);
+  let g=baslangic||today();
+  for(let i=0;i<180;i++){
+    if(personelBosKapasite(personelAdi,g)>=gereken)return g;
+    g=gunKaydir(g,1);
+  }
+  return null;
+}
+function tarihGosterTR(g){ const p=String(g||'').split('-'); return p.length===3?p[2]+'.'+p[1]:g; }
+
+// Adım Ekle formu: personel ya da süre değişince tarihi öner
+function adimTarihOner(elleCagrildi){
+  const per=document.getElementById('adim-atanan')?.value||'';
+  const sure=document.getElementById('adim-sure')?.value||'';
+  const tarihEl=document.getElementById('adim-tarih');
+  const ipucu=document.getElementById('adim-tarih-ipucu');
+  if(!tarihEl)return;
+  if(!per){ if(ipucu)ipucu.textContent=''; return; }
+  const gun=ilkUygunGun(per,sure);
+  if(!gun){ if(ipucu)ipucu.textContent=per+' için 6 ay içinde uygun gün bulunamadı.'; return; }
+  // Kullanıcı elle tarih girdiyse üzerine yazma; yalnızca düğmeyle ezilir
+  if(elleCagrildi||!tarihEl.value||tarihEl.dataset.oneri===tarihEl.value){
+    tarihEl.value=gun;
+    tarihEl.dataset.oneri=gun;
+  }
+  if(ipucu){
+    const bos=personelBosKapasite(per,gun);
+    ipucu.textContent=(tarihEl.value===gun?'✓ ':'')+per+' · ilk uygun gün '+tarihGosterTR(gun)
+      +' ('+Math.round(bos/60*10)/10+' saat boş)';
+  }
+}
 function adimAutoFillSure(){
   const itAd=document.getElementById('adim-isturi').value;
   if(!itAd)return;
@@ -3029,6 +3093,7 @@ function adimAutoFillSure(){
     const sure=parseInt(it[zorluk])||parseInt(it.normal)||parseInt(it.basit)||0;
     document.getElementById('adim-sure').value=sure>0?sure:'';
   }
+  adimTarihOner(false);
 }
 
 // ─── ARŞİV ───────────────────────────────────────────────────────────────────
@@ -4368,7 +4433,7 @@ function renderDetayAdimlar(){
             </select>
           </div>
           <div>
-            <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">📅 Hedef Tarih</div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600">📅 Hedef Tarih${a.atanan&&!kilitli?` <span onclick="event.stopPropagation();adimIcinTarihOner('${a.id}')" title="${kacir(a.atanan)} kişisinin takvimine göre öner" style="color:#1565c0;cursor:pointer;font-weight:700">🎯 öner</span>`:''}</div>
             <input type="date" value="${a.tarih||''}" onclick="event.stopPropagation()"${kilitAttr} onchange="adimAlanGuncelle('${a.id}','tarih',this.value)" style="width:100%;border:1.5px solid ${a.tarih?'#d0d7e3':'#ff8f00'};border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
           </div>
           <div>
@@ -4731,6 +4796,21 @@ async function adimAlanGuncelle(adimId,alan,deger){
 }
 // Adımı müşteri onay adımı yapar/geri alır. İşaretli adımı markanın müşteri
 // kullanıcısı görür ve onaylar; ekip bu adımın durumunu yine değiştirebilir.
+// Mevcut bir adım için atanan kişinin takvimine göre tarih öner
+async function adimIcinTarihOner(adimId){
+  const a=urunAdimlar.find(x=>x.id===adimId);
+  if(!a)return;
+  if(!adimBenimMi(a)){adimKilitUyari(a);return;}
+  if(!a.atanan){sbToast('Önce adıma bir personel atayın.');return;}
+  // Kendi süresini kendi doluluğundan düşmemek için geçici olarak yok say
+  const eskiTarih=a.tarih; a.tarih='';
+  const gun=ilkUygunGun(a.atanan,a.sure);
+  a.tarih=eskiTarih;
+  if(!gun){sbToast(a.atanan+' için 6 ay içinde uygun gün bulunamadı.');return;}
+  const bos=Math.round(personelBosKapasite(a.atanan,gun)/60*10)/10;
+  await adimAlanGuncelle(adimId,'tarih',gun);
+  sbToast('📅 '+tarihGosterTR(gun)+' önerildi — '+a.atanan+' o gün '+bos+' saat boş');
+}
 async function adimMusteriToggle(adimId,secili){
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
   if(!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}
