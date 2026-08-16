@@ -817,6 +817,31 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
     </div>
   </div>
 
+  <!-- GİRİŞ KAYITLARI (yalnızca yönetici) -->
+  <div id="vg-section" style="display:none;margin-top:20px">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+        <div class="card-title" style="margin:0">🔐 Giriş Kayıtları</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div><div class="lbl">Kullanıcı</div><select id="vg-kullanici" onchange="renderGirisKayitlari()"><option value="">Tümü</option></select></div>
+          <div><div class="lbl">Başlangıç</div><input type="date" id="vg-bas" onchange="renderGirisKayitlari()"></div>
+          <div><div class="lbl">Bitiş</div><input type="date" id="vg-bit" onchange="renderGirisKayitlari()"></div>
+          <button class="btn btn-sm" onclick="girisKayitlariYukle()">↻ Yenile</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#888;margin-bottom:14px">
+        Yalnızca <b>başarılı</b> girişler kaydedilir. Supabase'in barındırılan sürümü başarısız
+        deneme günlüğü tutmadığı için "yanlış şifre denendi" bilgisi bulunmuyor.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#1a237e;margin-bottom:8px">Şu an açık oturumlar</div>
+      <div id="vg-aktif" style="margin-bottom:20px"></div>
+
+      <div style="font-size:13px;font-weight:700;color:#1a237e;margin-bottom:8px">Giriş geçmişi</div>
+      <div id="vg-gecmis"></div>
+    </div>
+  </div>
+
 </div>
 
 
@@ -1309,6 +1334,8 @@ function sekmeleriGuncelle(){
   // Show/hide kullanici yonetimi
   const vkSection=document.getElementById('vk-section');
   if(vkSection)vkSection.style.display=aktifKullanici.rol==='admin'?'block':'none';
+  const vgSection=document.getElementById('vg-section');
+  if(vgSection)vgSection.style.display=adminMi()?'block':'none';
   // Ürün kartı silme yalnızca yöneticide
   const kartSilBtn=document.getElementById('kart-sil-btn');
   if(kartSilBtn)kartSilBtn.style.display=adminMi()?'':'none';
@@ -1384,6 +1411,108 @@ function musteriGorunumuUygula(){
   // ── Raporlama (müşteri sürümü) ──
   const mr=document.getElementById('musteri-rapor');
   if(mr)mr.style.display='block';
+}
+
+// ─── GİRİŞ KAYITLARI (yalnızca yönetici) ─────────────────────────────────────
+// Kayıtlar auth.sessions'a düşen her yeni oturumda trigger ile
+// public.giris_kayitlari tablosuna yazılır (bkz. sql/giris-kayitlari.sql).
+// auth.sessions oturum bitince temizlendiği için geçmiş orada durmuyordu.
+let girisKayitlari=[], aktifOturumlar=[];
+
+// Uzun user-agent metnini okunur bir cihaz adına indirger
+function cihazAdi(ua){
+  const u=String(ua||'');
+  if(!u)return '—';
+  const tarayici =/Edg\//.test(u)?'Edge'
+                 :/OPR\//.test(u)?'Opera'
+                 :/Chrome\//.test(u)?'Chrome'
+                 :/Safari\//.test(u)?'Safari'
+                 :/Firefox\//.test(u)?'Firefox'
+                 :/curl/i.test(u)?'curl'
+                 :u.split(/[ /]/)[0];
+  const sistem   =/iPhone|iPad/.test(u)?'iOS'
+                 :/Android/.test(u)?'Android'
+                 :/Mac OS X/.test(u)?'macOS'
+                 :/Windows/.test(u)?'Windows'
+                 :/Linux/.test(u)?'Linux':'';
+  return sistem?tarayici+' · '+sistem:tarayici;
+}
+function zamanTR(iso){
+  if(!iso)return '—';
+  const d=new Date(iso);
+  return d.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function gecenSure(iso){
+  if(!iso)return '';
+  const dk=Math.floor((Date.now()-new Date(iso).getTime())/60000);
+  if(dk<1)return 'az önce';
+  if(dk<60)return dk+' dk önce';
+  const sa=Math.floor(dk/60);
+  if(sa<24)return sa+' saat önce';
+  return Math.floor(sa/24)+' gün önce';
+}
+
+async function girisKayitlariYukle(){
+  if(!adminMi())return;
+  girisKayitlari=await sbGet('giris_kayitlari','order=giris_at.desc&limit=500');
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/rpc/aktif_oturumlar`,{method:'POST',headers:SBH(),body:'{}'});
+    aktifOturumlar=r.ok?await r.json():[];
+  }catch(e){ aktifOturumlar=[]; }
+  // Kullanıcı süzgecini doldur
+  const sel=document.getElementById('vg-kullanici');
+  if(sel){
+    const adlar=[...new Set(girisKayitlari.map(g=>g.ad_soyad||g.kullanici_adi).filter(Boolean))].sort();
+    const eski=sel.value;
+    sel.innerHTML='<option value="">Tümü</option>'+adlar.map(a=>`<option>${kacir(a)}</option>`).join('');
+    sel.value=eski;
+  }
+  renderGirisKayitlari();
+}
+
+function renderGirisKayitlari(){
+  const aktifKutu=document.getElementById('vg-aktif');
+  const gecmisKutu=document.getElementById('vg-gecmis');
+  if(!aktifKutu||!gecmisKutu)return;
+
+  const bos=m=>`<div style="color:#aaa;font-style:italic;font-size:13px;padding:14px">${m}</div>`;
+
+  aktifKutu.innerHTML=!aktifOturumlar.length?bos('Açık oturum yok.')
+    :`<div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Kişi</th><th>Rol</th><th>Giriş</th><th>Son etkinlik</th><th>IP</th><th>Cihaz</th></tr></thead>
+        <tbody>${aktifOturumlar.map(o=>`<tr>
+          <td><strong>${kacir(o.ad_soyad||o.kullanici_adi||'—')}</strong></td>
+          <td>${kacir(rolEtiketi(o.rol))}</td>
+          <td style="white-space:nowrap">${zamanTR(o.baslangic)}</td>
+          <td style="white-space:nowrap;color:#2e7d32">${gecenSure(o.son_etkinlik)}</td>
+          <td style="font-family:monospace;font-size:11px">${kacir(o.ip||'—')}</td>
+          <td style="font-size:11px;color:#666">${kacir(cihazAdi(o.tarayici))}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+
+  const fk=document.getElementById('vg-kullanici')?.value||'';
+  const fb=document.getElementById('vg-bas')?.value||'';
+  const fs2=document.getElementById('vg-bit')?.value||'';
+  const liste=girisKayitlari.filter(g=>{
+    const ad=g.ad_soyad||g.kullanici_adi||'';
+    if(fk&&ad!==fk)return false;
+    const gun=(g.giris_at||'').slice(0,10);
+    if(fb&&gun<fb)return false;
+    if(fs2&&gun>fs2)return false;
+    return true;
+  });
+
+  gecmisKutu.innerHTML=!liste.length?bos('Seçili aralıkta giriş kaydı yok.')
+    :`<div style="font-size:12px;color:#888;margin-bottom:8px">${liste.length} giriş</div>
+      <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="tbl">
+        <thead><tr><th>Kişi</th><th>Rol</th><th>Tarih / Saat</th><th>IP</th><th>Cihaz</th></tr></thead>
+        <tbody>${liste.map(g=>`<tr>
+          <td><strong>${kacir(g.ad_soyad||g.kullanici_adi||'(silinmiş hesap)')}</strong>
+              ${g.email?`<div style="font-size:10px;color:#aaa">${kacir(g.email)}</div>`:''}</td>
+          <td>${kacir(rolEtiketi(g.rol))}</td>
+          <td style="white-space:nowrap">${zamanTR(g.giris_at)}</td>
+          <td style="font-family:monospace;font-size:11px">${kacir(g.ip||'—')}</td>
+          <td style="font-size:11px;color:#666">${kacir(cihazAdi(g.tarayici))}</td>
+        </tr>`).join('')}</tbody></table></div>`;
 }
 
 // ─── KULLANICI YÖNETİMİ ───────────────────────────────────────────────────────
@@ -1785,6 +1914,7 @@ async function init(){
   renderVeriIsTurleri();
   renderVeriMarkalar();
   if(adminMi())haftalikAbonelikleriYukle();
+  if(adminMi())girisKayitlariYukle();
   renderIzinler();
   renderTodoList();
   renderMaliyetFiyatTbl();
