@@ -1098,14 +1098,47 @@ function authYenilemeZamanla(){
 }
 // Kullanıcının kendi şifresini değiştirmesi. Auth'a geçişte herkese geçici
 // şifre verildiği için bu ekran şart: yöneticiye gitmeden değiştirebilsinler.
+/*
+  Şifre değiştirme.
+
+  MEVCUT ŞİFRE SORULUYOR ve bu bilinçli: yalnızca yeni şifre isteseydik,
+  oturumu ele geçiren biri (açık unutulmuş bilgisayar, çalınmış jeton)
+  şifreyi değiştirip hesabı sahibinden koparabilirdi. Mevcut şifre,
+  jetonu olan kişinin gerçekten hesap sahibi olduğunu doğrular.
+
+  Doğrulama sunucuda yapılır: girilen şifreyle bir kez giriş denenir.
+  Başarısızsa hiçbir değişiklik yapılmaz.
+*/
 async function sifremiDegistir(){
   if(!AUTH_MODU||!authOturum){alert('Bu özellik için yeniden giriş yapmanız gerekiyor.');return;}
+  const eposta=(aktifKullanici&&aktifKullanici.email)||'';
+  if(!eposta){alert('Hesabınızda e-posta tanımlı değil. Yöneticinize başvurun.');return;}
+
+  const mevcut=prompt('Güvenlik için mevcut şifrenizi girin:');
+  if(mevcut===null)return;
+  if(!mevcut){alert('Mevcut şifre gerekli.');return;}
+
   const yeni=prompt('Yeni şifreniz (en az 8 karakter):');
   if(yeni===null)return;
   if(!yeni||yeni.length<8){alert('Şifre en az 8 karakter olmalıdır.');return;}
   const tekrar=prompt('Yeni şifrenizi tekrar girin:');
   if(tekrar===null)return;
   if(yeni!==tekrar){alert('İki şifre birbiriyle uyuşmuyor. Değişiklik yapılmadı.');return;}
+  if(yeni===mevcut){alert('Yeni şifre eskisiyle aynı olamaz.');return;}
+
+  try{
+    // Mevcut şifreyi sunucuya doğrulat
+    const dogrula=await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({email:eposta,password:mevcut})
+    });
+    if(!dogrula.ok){alert('Mevcut şifre hatalı. Değişiklik yapılmadı.');return;}
+    // Doğrulama yeni bir oturum açar; bundan sonrasında onu kullanırız
+    const yeniOturum=await dogrula.json().catch(()=>null);
+    if(yeniOturum&&yeniOturum.access_token)authOturumYaz(yeniOturum);
+  }catch(e){ alert('Bağlantı hatası: '+e.message); return; }
+
   try{
     const r=await fetch(`${SB_URL}/auth/v1/user`,{
       method:'PUT',
