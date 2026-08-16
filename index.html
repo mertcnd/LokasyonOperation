@@ -597,7 +597,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div style="font-size:15px;font-weight:700;color:#1565c0">Personel Yönetimi</div></div>
       <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <input type="text" id="vp-ad" placeholder="Personel Adı Soyadı">
-        <input type="email" id="vp-email" placeholder="ornek@lokasyonistanbul.com">
+        <input type="email" id="vp-email" placeholder="ornek@ornek.com">
         <select id="vp-seviye">
           <option>Level 1</option><option>Level 2</option><option selected>Level 3 (Standard)</option><option>Level 4</option><option>Level 5</option>
         </select>
@@ -785,7 +785,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   </div>
 </div>
 
-  <!-- KULLANICI YÖNETİMİ (admin only) -->
+  <!-- Kullanıcı yönetimi bölümü -->
   <div id="vk-section" style="display:none;margin-top:20px">
     <div class="card">
       <div class="card-title">Kullanıcı Yönetimi</div>
@@ -1275,7 +1275,7 @@ function loginEkraniGoster(){
   const ku=document.getElementById('giris-kullanici');
   if(ku&&AUTH_MODU){
     ku.type='email';
-    ku.placeholder='ad.soyad@lokasyonistanbul.com';
+    ku.placeholder='e-posta adresiniz';
     ku.autocomplete='email';
     const lbl=ku.previousElementSibling;
     if(lbl&&lbl.classList.contains('lbl'))lbl.textContent='E-posta';

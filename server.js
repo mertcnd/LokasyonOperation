@@ -4,17 +4,55 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 const FILE = path.join(__dirname, 'index.html');
+const SUPABASE = 'https://wimqfhjyflraorytlnsl.supabase.co';
+const CDN = 'https://cdnjs.cloudflare.com';
+
+/*
+  Güvenlik başlıkları (PentestTools taraması, 16.08.2026).
+
+  CSP notu: panel HTML'i satır içi onclick işleyicileri ve tek bir gömülü
+  <script> bloğu üzerine kurulu, bu yüzden 'unsafe-inline' zorunlu —
+  kaldırmak arayüzün tamamını çalışmaz hale getirir. Yine de CSP boş yere
+  konmuyor: frame-ancestors clickjacking'i, connect-src verinin başka bir
+  sunucuya sızdırılmasını, object-src eklenti tabanlı saldırıları kapatıyor.
+  XSS'in asıl savunması render tarafındaki kaçırma (kacir/jsKacir/htmlTemizle).
+*/
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline' ${CDN}`,
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: ${SUPABASE}`,
+  "font-src 'self' data:",
+  `connect-src 'self' ${SUPABASE} ${CDN}`,
+  "worker-src 'self' blob:",
+  "frame-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'"
+].join('; ');
+
+const GUVENLIK_BASLIKLARI = {
+  'Content-Security-Policy': CSP,
+  // Railway TLS'i sonlandırıyor; tarayıcı bu alan adına yalnızca HTTPS ile gelsin
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()'
+};
 
 http.createServer((req, res) => {
   fs.readFile(FILE, (err, data) => {
     if (err) {
-      res.writeHead(500);
+      res.writeHead(500, GUVENLIK_BASLIKLARI);
       res.end('Server error');
       return;
     }
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-cache'
+      'Cache-Control': 'no-cache',
+      ...GUVENLIK_BASLIKLARI
     });
     res.end(data);
   });
