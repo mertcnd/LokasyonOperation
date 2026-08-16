@@ -327,3 +327,10 @@ update storage.buckets set public = false where id = 'urun-dokumanlari';
 -- Sıra önemli: önce yetkili politikalar eklenir, sonra panel imzalı bağlantıya
 -- geçirilip yayına alınır, en son anon politikaları düşürülüp kova kapatılır.
 -- Ters sırada bütün dokümanlar erişilemez hale gelirdi.
+
+-- ── Denetim sonrası sertleştirme (16.08.2026) ───────────────────────────────
+-- giris_kaydet() bir TRIGGER fonksiyonu: trigger tablo sahibi yetkisiyle
+-- çalışır, çağıran rolün EXECUTE yetkisine ihtiyacı yoktur. RPC ucu olarak
+-- dışarıya açık kalmasının gerekçesi yok.
+revoke execute on function public.giris_kaydet() from anon, authenticated, public;
+revoke all on public.sistem_gizli from anon, authenticated;
