@@ -3082,6 +3082,19 @@ function personelBosKapasite(personelAdi,gun){
     .reduce((t,g)=>t+(parseInt(g.sure)||0),0);
   return Math.max(0,mesai-izin-adimYuku-gorevYuku);
 }
+/*
+  Bir adim, KENDINDEN ONCEKI adimlardan once planlanamaz. Personelin takvimi
+  bos olsa bile onceki adim bitmeden sonraki adim baslamaz. Burasi o siniri
+  verir: kart icinde daha kucuk siradaki adimlarin en gec tarihi.
+  Ayni gune izin verilir (kisa bir adim, oncekiyle ayni gun bitebilir);
+  yalnizca ONCESI engellenir.
+*/
+function oncekiAdimSiniri(kartId,sira){
+  const oncekiler=urunAdimlar.filter(a=>a.kart_id===kartId&&!a.arsivlendi
+                                        &&(a.sira||0)<sira&&a.tarih);
+  if(!oncekiler.length)return null;
+  return oncekiler.reduce((enGec,a)=>a.tarih>enGec?a.tarih:enGec,oncekiler[0].tarih);
+}
 function ilkUygunGun(personelAdi,sureDk,baslangic){
   if(!personelAdi)return null;
   // Bir günden uzun işler zaten tek güne sığmaz; o gün başlayabilmesi yeterli
@@ -3103,7 +3116,12 @@ function adimTarihOner(elleCagrildi){
   const ipucu=document.getElementById('adim-tarih-ipucu');
   if(!tarihEl)return;
   if(!per){ if(ipucu)ipucu.textContent=''; return; }
-  const gun=ilkUygunGun(per,sure);
+  // Yeni adım hangi sıraya girecekse, ondan öncekiler sınırı belirler
+  const siraStr=document.getElementById('adim-sira-sec')?.value||'';
+  const hedefSira=siraStr?parseInt(siraStr):Number.MAX_SAFE_INTEGER;
+  const sinir=aktifKartId?oncekiAdimSiniri(aktifKartId,hedefSira):null;
+  const baslangic=(sinir&&sinir>today())?sinir:today();
+  const gun=ilkUygunGun(per,sure,baslangic);
   if(!gun){ if(ipucu)ipucu.textContent=per+' için 6 ay içinde uygun gün bulunamadı.'; return; }
   // Kullanıcı elle tarih girdiyse üzerine yazma; yalnızca düğmeyle ezilir
   if(elleCagrildi||!tarihEl.value||tarihEl.dataset.oneri===tarihEl.value){
@@ -3113,7 +3131,8 @@ function adimTarihOner(elleCagrildi){
   if(ipucu){
     const bos=personelBosKapasite(per,gun);
     ipucu.textContent=(tarihEl.value===gun?'✓ ':'')+per+' · ilk uygun gün '+tarihGosterTR(gun)
-      +' ('+Math.round(bos/60*10)/10+' saat boş)';
+      +' ('+Math.round(bos/60*10)/10+' saat boş)'
+      +(sinir?' · önceki adım '+tarihGosterTR(sinir)+' olduğu için daha erken olamaz':'');
   }
 }
 function adimAutoFillSure(){
@@ -4837,12 +4856,15 @@ async function adimIcinTarihOner(adimId){
   if(!a.atanan){sbToast('Önce adıma bir personel atayın.');return;}
   // Kendi süresini kendi doluluğundan düşmemek için geçici olarak yok say
   const eskiTarih=a.tarih; a.tarih='';
-  const gun=ilkUygunGun(a.atanan,a.sure);
+  const sinir=oncekiAdimSiniri(a.kart_id,a.sira||0);
+  const baslangic=(sinir&&sinir>today())?sinir:today();
+  const gun=ilkUygunGun(a.atanan,a.sure,baslangic);
   a.tarih=eskiTarih;
   if(!gun){sbToast(a.atanan+' için 6 ay içinde uygun gün bulunamadı.');return;}
   const bos=Math.round(personelBosKapasite(a.atanan,gun)/60*10)/10;
   await adimAlanGuncelle(adimId,'tarih',gun);
-  sbToast('📅 '+tarihGosterTR(gun)+' önerildi — '+a.atanan+' o gün '+bos+' saat boş');
+  sbToast('📅 '+tarihGosterTR(gun)+' önerildi — '+a.atanan+' o gün '+bos+' saat boş'
+    +(sinir?' · önceki adım '+tarihGosterTR(sinir):''));
 }
 async function adimMusteriToggle(adimId,secili){
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
