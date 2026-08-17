@@ -1360,6 +1360,56 @@ async function oturumKontrol(){
   }
 }
 
+/* ── SÜRÜM DENETİMİ ──────────────────────────────────────────────────────────
+  Bildirim e-postalarının HTML'i sunucuda değil TARAYICIDA üretiliyor. Panel
+  tek dosyalık olduğu için, sekme günlerce açık kaldığında sunucudaki sürüm
+  güncellense bile o sekme eski kodu çalıştırmaya devam eder ve eski şablonla
+  mail gönderir. 17.08.2026'da böyle oldu: e-posta bağlantısı canlıya çıktıktan
+  10 dakika sonra, açık bir sekmeden bağlantısız mail gitti.
+
+  Açık sekme artık sunucudaki sürümü yokluyor ve değiştiyse yenilemeye çağıran
+  bir şerit çıkarıyor. Sayfa KENDİLİĞİNDEN yenilenmiyor: kullanıcı o sırada
+  yarım kalmış bir form doldurıyor olabilir, altından sayfayı çekmek yaptığı
+  işi silmek olurdu. Karar kullanıcının.
+──────────────────────────────────────────────────────────────────────────── */
+const SURUM_ARALIK=5*60*1000;
+let calisanSurum=null, surumUyarildi=false;
+
+async function surumOku(){
+  try{
+    const r=await fetch('/surum',{cache:'no-store'});
+    if(!r.ok)return null;
+    const j=await r.json();
+    return (j&&j.surum)||null;
+  }catch(e){
+    return null;   // ağ kesintisi ya da dağıtım anı yanlış alarma dönüşmesin
+  }
+}
+async function surumKontrol(){
+  if(surumUyarildi||!calisanSurum)return;
+  const s=await surumOku();
+  if(!s||s===calisanSurum)return;
+  surumUyarildi=true;
+  guncellemeSeridiGoster();
+}
+async function surumIzlemeBaslat(){
+  calisanSurum=await surumOku();
+  if(!calisanSurum)return;   // sürüm ucu yoksa (eski sunucu) sessizce vazgeç
+  setInterval(surumKontrol,SURUM_ARALIK);
+  // Sekmeye geri dönüldüğünde de bakılır: kullanıcı asıl o an iş yapmaya başlar.
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden)surumKontrol(); });
+}
+function guncellemeSeridiGoster(){
+  if(document.getElementById('surum-serit'))return;
+  const d=document.createElement('div');
+  d.id='surum-serit';
+  d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99998;background:#1a237e;color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px;font-size:13px;box-shadow:0 -3px 18px rgba(0,0,0,.28)';
+  d.innerHTML=`<div style="flex:1;line-height:1.5">🔄 <b>Panel güncellendi.</b> Bu sekme hâlâ eski sürümü çalıştırıyor — yenilemeden gönderilen e-posta bildirimleri eski biçimiyle gider.</div>
+    <button onclick="location.reload()" style="background:#fff;color:#1a237e;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Yenile</button>
+    <button onclick="this.parentNode.remove()" title="Şimdilik gizle" style="background:none;border:none;color:#c5cae9;font-size:20px;cursor:pointer;line-height:1;padding:0 4px">×</button>`;
+  document.body.appendChild(d);
+}
+
 /* ── DERİN BAĞLANTI (e-postadan doğrudan işe gitme) ──────────────────────────
   E-postalardaki "Adımı panelde aç" düğmesi #kart=<id>&adim=<id> adresine
   gider. Hedef, veriler yüklendikten SONRA açılır (init/musteriInit sonu),
@@ -1921,6 +1971,7 @@ async function musteriInit(){
   ortakOlaylariBagla();   // doküman notları + dosya karşılaştırma fare/klavye olayları
   hideLoading();
   derinBaglantiUygula();
+  surumIzlemeBaslat();
 }
 
 async function init(){
@@ -2052,6 +2103,7 @@ async function init(){
   hideLoading();
   timerRestoreLocal();
   derinBaglantiUygula();   // e-postadan gelindiyse ilgili adımı aç
+  surumIzlemeBaslat();
 }
 
 /*

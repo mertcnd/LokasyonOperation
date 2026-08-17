@@ -42,7 +42,36 @@ const GUVENLIK_BASLIKLARI = {
   'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()'
 };
 
+/*
+  SÜRÜM UCU (/surum)
+
+  Panel tek dosyalık bir uygulama ve bildirim e-postalarının HTML'i tarayıcıda
+  üretiliyor. Sekme günlerce açık kaldığında sunucudaki panel güncellense bile
+  o sekme eski kodu çalıştırmaya devam eder. 17.08.2026'da tam olarak bu oldu:
+  e-posta bağlantısı canlıya çıktıktan 10 dakika sonra, açık bir sekmeden
+  bağlantısız mail gitti.
+
+  Özet süreç başlarken bir kez hesaplanıyor; Railway her dağıtımda yeni bir kap
+  başlattığı için dosya çalışma sırasında değişmez.
+*/
+const crypto = require('crypto');
+let SURUM = 'bilinmiyor';
+try {
+  SURUM = crypto.createHash('sha1').update(fs.readFileSync(FILE)).digest('hex').slice(0, 12);
+} catch (e) {
+  console.error('Sürüm özeti hesaplanamadı:', e.message);
+}
+
 http.createServer((req, res) => {
+  if (req.url === '/surum' || req.url.startsWith('/surum?')) {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      ...GUVENLIK_BASLIKLARI
+    });
+    res.end(JSON.stringify({ surum: SURUM }));
+    return;
+  }
   fs.readFile(FILE, (err, data) => {
     if (err) {
       res.writeHead(500, GUVENLIK_BASLIKLARI);
