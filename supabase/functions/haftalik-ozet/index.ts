@@ -10,6 +10,11 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "onboarding@resend.dev"
 const REPLY_TO = Deno.env.get("REPLY_TO_EMAIL") || ""
+// Ozetteki her adim, panelde o adimi dogrudan acan bir baglantidir.
+// Panel adres parcasini (#kart=..&adim=..) okuyup ilgili adima gider.
+const PANEL_ADRESI = "https://panel.lokasyonistanbul.com"
+const adimBaglantisi = (kartId: string, adimId?: string) =>
+  `${PANEL_ADRESI}/#kart=${encodeURIComponent(kartId)}${adimId ? `&adim=${encodeURIComponent(adimId)}` : ""}`
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,7 +153,7 @@ async function ozetUret(marka: string) {
           const gec = a.durum !== "Tamamlandı" && a.tarih && a.tarih < bugun
           return `<tr style="background:${ret ? "#fff5f5" : "#fff"}">
             <td style="padding:7px 8px;font-size:12px;color:#888;border-bottom:1px solid #f0f3f8;width:26px">${a.sira ?? ""}</td>
-            <td style="padding:7px 8px;font-size:12px;font-weight:600;color:${ret ? "#c62828" : "#222"};border-bottom:1px solid #f0f3f8">${esc(a.ad)}</td>
+            <td style="padding:7px 8px;font-size:12px;font-weight:600;border-bottom:1px solid #f0f3f8"><a href="${adimBaglantisi(k.id, a.id)}" style="color:${ret ? "#c62828" : "#1565c0"};text-decoration:none">${esc(a.ad)}</a></td>
             <td style="padding:7px 8px;font-size:12px;color:#555;border-bottom:1px solid #f0f3f8">${esc(a.is_turu || "—")}</td>
             <td style="padding:7px 8px;font-size:12px;color:${gec ? "#c62828" : "#555"};border-bottom:1px solid #f0f3f8;white-space:nowrap">${trTarih(a.tarih)}${gec ? " ⚠" : ""}</td>
             <td style="padding:7px 8px;border-bottom:1px solid #f0f3f8;text-align:right">${rozet(a.durum)}</td>
@@ -158,11 +163,12 @@ async function ozetUret(marka: string) {
 
     return `<div style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:16px;overflow:hidden">
       <div style="background:#f8fafc;padding:12px 14px;border-bottom:1px solid #e2e8f0">
-        <div style="font-size:14px;font-weight:800;color:#1a237e">
-          ${k.kod ? `<span style="background:#1a237e;color:#fff;font-family:monospace;font-size:11px;padding:2px 8px;border-radius:5px;margin-right:8px">${esc(k.kod)}</span>` : ""}${esc(k.ad)}
+        <div style="font-size:14px;font-weight:800">
+          <a href="${adimBaglantisi(k.id)}" style="color:#1a237e;text-decoration:none">${k.kod ? `<span style="background:#1a237e;color:#fff;font-family:monospace;font-size:11px;padding:2px 8px;border-radius:5px;margin-right:8px">${esc(k.kod)}</span>` : ""}${esc(k.ad)}</a>
         </div>
         <div style="font-size:11px;color:#888;margin-top:5px">
           ${tam} / ${kAdim.length} adım tamamlandı · %${pct} &nbsp;·&nbsp; Durum: ${esc(k.durum || "—")}
+          &nbsp;·&nbsp; <a href="${adimBaglantisi(k.id)}" style="color:#1565c0">panelde aç</a>
         </div>
       </div>
       <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
@@ -198,7 +204,7 @@ async function ozetUret(marka: string) {
         <div style="font-size:13px;font-weight:800;color:#c62828;margin-bottom:6px">⛔ RET verilen adımlar</div>
         ${retler.map((a) => {
           const k = kartlar.find((x) => x.id === a.kart_id)
-          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.kod ? k.kod + " " : "")}${esc(k?.ad || "")}</div>`
+          return `<div style="font-size:12px;color:#333;margin-top:3px">• <a href="${adimBaglantisi(a.kart_id, a.id)}" style="color:#c62828"><strong>${esc(a.ad)}</strong></a> — ${esc(k?.kod ? k.kod + " " : "")}${esc(k?.ad || "")}</div>`
         }).join("")}
       </div>` : ""}
 
@@ -206,7 +212,7 @@ async function ozetUret(marka: string) {
         <div style="font-size:13px;font-weight:800;color:#e65100;margin-bottom:6px">⚠ Tarihi geçmiş adımlar</div>
         ${gecikmis.slice(0, 15).map((a) => {
           const k = kartlar.find((x) => x.id === a.kart_id)
-          return `<div style="font-size:12px;color:#333;margin-top:3px">• <strong>${esc(a.ad)}</strong> — ${esc(k?.ad || "")} · hedef ${trTarih(a.tarih)}</div>`
+          return `<div style="font-size:12px;color:#333;margin-top:3px">• <a href="${adimBaglantisi(a.kart_id, a.id)}" style="color:#e65100"><strong>${esc(a.ad)}</strong></a> — ${esc(k?.ad || "")} · hedef ${trTarih(a.tarih)}</div>`
         }).join("")}
         ${gecikmis.length > 15 ? `<div style="font-size:11px;color:#888;margin-top:6px">…ve ${gecikmis.length - 15} adım daha</div>` : ""}
       </div>` : ""}
