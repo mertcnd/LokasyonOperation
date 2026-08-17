@@ -5555,6 +5555,8 @@ function karsilastirmaAc(){
   document.getElementById('kars-dosya-b').value='';
   document.getElementById('kars-sonuc').style.display='none';
   document.getElementById('kars-durum').style.display='none';
+  document.getElementById('fk-sonuc').style.display='none';
+  document.getElementById('fk-durum').style.display='none';
   document.getElementById('karsilastirma-modal').style.display='flex';
 }
 function karsDurum(msg){
@@ -5672,6 +5674,245 @@ async function karsilastir(){
   }finally{
     btn.disabled=false;btn.textContent='Karşılaştır';
   }
+}
+
+/* ── MİNİMUM FONT KONTROLÜ (x-yüksekliği) ────────────────────────────────────
+  Mevzuat (TGK Etiketleme Yönetmeliği / AB 1169-2011) zorunlu bilgiler için
+  PUNTO değil X-YÜKSEKLİĞİ şartı koyar: küçük "x" harfinin yüksekliği. Aynı
+  puntoda iki farklı yazı karakterinin x-yüksekliği %20'ye varan fark
+  gösterebildiği için puntodan gidilirse sınırda yanlış karar verilir.
+
+  Bu yüzden her fontun x-oranı gerçek gömülü font dosyasından ölçülür:
+  pdf.js'in dönüştürdüğü font baytları FontFace olarak yüklenir, canvas
+  measureText ile küçük harflerin mürekkep yüksekliği alınır.
+
+  İki tuzak var, ikisi de burada ele alınıyor:
+
+  1) Ambalaj PDF'lerindeki fontlar ALTKÜME (subset) gömülür — yalnızca o
+     tasarımda geçen harfler bulunur. Türkçe metinde "x" neredeyse hiç
+     geçmediği için fontta çoğu zaman x glifi YOKTUR; canvas sessizce yedek
+     fonta düşer ve her fonta aynı oranı verir. Bu yüzden önce yedek fontun
+     profili çıkarılıyor, ölçüm ona eşitse o harf yok sayılıyor.
+  2) Yuvarlak harfler (a c e o s) tipografik taşma payıyla x-yüksekliğinin bir
+     miktar üstüne çıkar. Önce düz tepeli harfler (x m n r u v w z ı)
+     deneniyor, ancak hiçbiri yoksa yuvarlaklara düşülüyor.
+
+  ÖLÇÜLEMEYEN DURUM: yazı eğriye çevrilmişse (outline) PDF'te metin nesnesi
+  kalmaz, hiçbir araç ölçemez. Rapor bunu sessizce geçmez, ayrıca yazar —
+  yoksa "hepsi uygun" çıktısı, aslında hiç bakılmamış bir dosya için okunur.
+──────────────────────────────────────────────────────────────────────────── */
+const FK_PT_MM=25.4/72;
+const FK_DUZ='xmnruvwzı';    // düz tepeli: gerçek x-yüksekliği
+const FK_YUVARLAK='aceos';   // yuvarlak: taşma payı içerir, yedek çözüm
+const FK_BUYUK='HITELNMU';   // büyük harf yüksekliği (tamamı büyük yazılar için)
+const FK_S=500;              // ölçüm punto tabanı
+const FK_VARSAYILAN_ORAN=0.5;
+let fkSayac=0, fkOlcumCtx=null;
+
+function fkCtx(){
+  if(!fkOlcumCtx)fkOlcumCtx=document.createElement('canvas').getContext('2d');
+  return fkOlcumCtx;
+}
+function fkDurum(msg,renk){
+  const el=document.getElementById('fk-durum');
+  el.textContent=msg;
+  el.style.color=renk||'#1565c0';
+  el.style.background=renk?'#fdecea':'#e3f2fd';
+  el.style.display=msg?'block':'none';
+}
+function fkOrta(d){   // medyan: tek bir sapan ölçüm sonucu bozmasın
+  if(!d.length)return null;
+  const s=[...d].sort((a,b)=>a-b);
+  return s[Math.floor(s.length/2)];
+}
+// Var olmayan bir aile istenince tarayıcı yedek fonta düşer. O yedeğin
+// harf yükseklikleri, "bu harf fontta yok" tespitinin ölçütü olur.
+function fkYedekProfil(ctx){
+  ctx.font=FK_S+'px "fk_bulunmayan_aile_'+(fkSayac++)+'"';
+  const p={};
+  for(const ch of FK_DUZ+FK_YUVARLAK+FK_BUYUK)p[ch]=ctx.measureText(ch).actualBoundingBoxAscent;
+  return p;
+}
+async function fkFontOlc(page,fontAdi,onbellek,ctx,yedek){
+  if(onbellek[fontAdi])return onbellek[fontAdi];
+  const s={ad:fontAdi,x:FK_VARSAYILAN_ORAN,cap:null,kaynak:'tahmini'};
+  let o=null;
+  try{ o=page.commonObjs.get(fontAdi); }catch(e){}
+  if(o){
+    s.ad=(o.name||fontAdi).replace(/^[A-Z]{6}\+/,'');   // altküme etiketini at
+    if(o.isType3Font){ s.kaynak='type3'; onbellek[fontAdi]=s; return s; }
+    try{
+      const aile='fk_font_'+(fkSayac++);
+      const ff=new FontFace(aile,o.data.buffer||o.data);
+      await ff.load(); document.fonts.add(ff);
+      ctx.font=FK_S+'px "'+aile+'"';
+      const olc=harfler=>{
+        const v=[];
+        for(const ch of harfler){
+          const a=ctx.measureText(ch).actualBoundingBoxAscent;
+          if(!a||Math.abs(a-yedek[ch])<0.01)continue;   // fontta yok → yedeğe düştü
+          v.push(a/FK_S);
+        }
+        return v;
+      };
+      const duz=olc(FK_DUZ), yuv=olc(FK_YUVARLAK), buy=olc(FK_BUYUK);
+      document.fonts.delete(ff);
+      const x=fkOrta(duz)||fkOrta(yuv);
+      if(x){ s.x=x; s.kaynak=duz.length?'olculdu':'yuvarlak'; }
+      s.cap=fkOrta(buy);
+    }catch(e){ console.warn('font ölçülemedi:',fontAdi,e); }
+    if(o.missingFile)s.kaynak='gomulu-degil';
+  }
+  onbellek[fontAdi]=s;
+  return s;
+}
+
+async function fontKontrolCalistir(){
+  const hangi=document.getElementById('fk-dosya').value;
+  const f=document.getElementById('kars-dosya-'+hangi).files[0];
+  if(!f){alert('Önce "'+(hangi==='a'?'Dosya A':'Dosya B')+'" alanından bir PDF seçin.');return}
+  if(!/\.pdf$/i.test(f.name)){
+    alert('Font ölçümü yalnızca PDF üzerinde yapılabilir.\n\nJPG/PNG bir görüntüdür, içinde ölçülebilir metin nesnesi bulunmaz.');
+    return;
+  }
+  if(!window.pdfjsLib){alert('PDF kütüphanesi yüklenemedi. Sayfayı yenileyin.');return}
+  const esik=parseFloat(document.getElementById('fk-esik').value)||1.2;
+  const olcek=(parseFloat(document.getElementById('fk-olcek').value)||100)/100;
+  const btn=document.getElementById('fk-btn');
+  btn.disabled=true;btn.textContent='Ölçülüyor...';
+  document.getElementById('fk-sonuc').style.display='none';
+  try{
+    fkDurum('PDF okunuyor...');
+    const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer(),fontExtraProperties:true}).promise;
+    const ctx=fkCtx(), yedek=fkYedekProfil(ctx), onbellek={};
+    const gruplar=new Map(), sayfalar=[];
+    for(let p=1;p<=pdf.numPages;p++){
+      fkDurum('Sayfa '+p+' / '+pdf.numPages+' ölçülüyor...');
+      const page=await pdf.getPage(p);
+      const vp=page.getViewport({scale:1});
+      await page.getOperatorList();          // fontları commonObjs'e kaydettirir
+      const tc=await page.getTextContent();
+      let adet=0;
+      for(const it of tc.items){
+        if(!it.str||!it.str.trim())continue;
+        const punto=Math.hypot(it.transform[2],it.transform[3]);
+        if(!(punto>0))continue;
+        adet++;
+        const fo=await fkFontOlc(page,it.fontName,onbellek,ctx,yedek);
+        // Eğri üzerine yazılmış metinlerde her harf ayrı nesnedir; aynı sayfa +
+        // font + punto tek satırda toplanmazsa tablo yüzlerce tek harflik satıra
+        // dönüşür ve okunmaz olur.
+        const anahtar=p+'|'+it.fontName+'|'+punto.toFixed(1);
+        let g=gruplar.get(anahtar);
+        if(!g){g={sayfa:p,font:fo,punto,metin:'',adet:0};gruplar.set(anahtar,g);}
+        g.adet++;
+        g.punto=Math.min(g.punto,punto);
+        if(g.metin.length<70)g.metin+=it.str;
+      }
+      sayfalar.push({no:p,en:vp.width*FK_PT_MM*olcek,boy:vp.height*FK_PT_MM*olcek,adet});
+    }
+    fkDurum('');
+    fkSonucCiz([...gruplar.values()],sayfalar,esik,olcek,f.name);
+  }catch(e){
+    console.error('Font kontrol hatası:',e);
+    fkDurum('Ölçüm yapılamadı: '+e.message,'#c62828');
+  }finally{
+    btn.disabled=false;btn.textContent='Ölç';
+  }
+}
+
+function fkSonucCiz(gruplar,sayfalar,esik,olcek,dosyaAdi){
+  gruplar.forEach(g=>{
+    g.xmm=g.font.x*g.punto*FK_PT_MM*olcek;
+    g.capmm=g.font.cap?g.font.cap*g.punto*FK_PT_MM*olcek:null;
+    g.kalir=g.xmm<esik-0.0005;
+  });
+  gruplar.sort((a,b)=>a.xmm-b.xmm);
+  const kalan=gruplar.filter(g=>g.kalir);
+  const bos=sayfalar.filter(s=>!s.adet);
+  const supheli=gruplar.filter(g=>g.font.kaynak==='tahmini'||g.font.kaynak==='type3');
+  const mm=v=>v==null?'—':v.toFixed(2);
+
+  let ozet;
+  if(!gruplar.length){
+    ozet=`<div style="background:#fff3e0;color:#e65100;padding:12px 16px;border-radius:8px;font-size:13px;font-weight:700">
+      ⚠ Bu PDF'te hiç metin nesnesi yok — ölçüm yapılamadı.
+      <div style="font-weight:400;font-size:12px;margin-top:6px">Yazılar eğriye çevrilmiş (outline) görünüyor. Bu durumda font yüksekliği hiçbir araçla ölçülemez; kaynak dosyadan ya da eğriye çevrilmemiş bir sürümden kontrol edilmeli.</div></div>`;
+  }else if(kalan.length){
+    ozet=`<div style="background:#fce4ec;color:#c62828;padding:12px 16px;border-radius:8px;font-size:13px;font-weight:700">
+      ✖ ${kalan.length} metin ${esik} mm standardının altında — en küçüğü ${mm(gruplar[0].xmm)} mm
+      <div style="font-weight:400;font-size:12px;margin-top:6px">Aşağıdaki kırmızı satırlar standardın altında kalan yazılardır.</div></div>`;
+  }else{
+    ozet=`<div style="background:#e8f5e9;color:#2e7d32;padding:12px 16px;border-radius:8px;font-size:13px;font-weight:700">
+      ✔ Ölçülebilen tüm metinler ${esik} mm standardının üstünde — en küçüğü ${mm(gruplar[0].xmm)} mm</div>`;
+  }
+
+  // Kapsam uyarıları: neyin ölçülemediği, sonucun kendisi kadar önemli.
+  let uyari='';
+  if(bos.length&&gruplar.length){   // hiç metin yoksa özet zaten bunu söylüyor
+    uyari+=`<div style="background:#fff3e0;color:#e65100;padding:10px 14px;border-radius:8px;font-size:12px;margin-top:8px">
+      ⚠ ${bos.length} sayfada (${bos.map(s=>s.no).join(', ')}) hiç metin nesnesi yok — yazılar eğriye çevrilmiş, o sayfalar ölçülemedi.</div>`;
+  }
+  /*
+    En sinsi durum: sayfada bir iki teknik yazı (dosya adı, versiyon damgası)
+    duruyor, ambalaj metninin tamamı eğriye çevrilmiş. Ölçüm o iki yazıyı
+    bulup "uygun" der ve dosya kontrol edilmiş sayılır. Gerçek ambalaj
+    sayfalarında yüzlerce metin nesnesi olur; onlu sayılar bu tuzağın işareti.
+  */
+  const kismi=sayfalar.filter(s=>s.adet>0&&s.adet<10);
+  if(kismi.length){
+    uyari+=`<div style="background:#fff3e0;color:#e65100;padding:10px 14px;border-radius:8px;font-size:12px;margin-top:8px">
+      ⚠ ${kismi.length} sayfada çok az metin nesnesi bulundu (${kismi.map(s=>'s.'+s.no+': '+s.adet+' adet').join(', ')}).
+      Ambalaj yazılarının büyük bölümü eğriye çevrilmiş olabilir — bu sayfalarda aşağıdaki sonuç yalnızca kalan birkaç yazıyı kapsar, sayfanın tamamını değil.</div>`;
+  }
+  if(supheli.length){
+    uyari+=`<div style="background:#fff8e1;color:#8d6e00;padding:10px 14px;border-radius:8px;font-size:12px;margin-top:8px">
+      ⓘ ${supheli.length} satırda x-yüksekliği doğrudan ölçülemedi, ${FK_VARSAYILAN_ORAN} varsayılan oranıyla hesaplandı.
+      Sebebi genellikle yazının tamamının büyük harf olmasıdır: font altkümeye gömüldüğü için içinde hiç küçük harf bulunmaz.
+      Bu satırlarda güvenilir sayı <b>büyük harf</b> sütunudur.</div>`;
+  }
+
+  const satirlar=gruplar.map(g=>{
+    // "tahmini" tek başına yetersiz bir gerekçe: sebebi neredeyse her zaman
+    // yazının tamamının büyük harf olması, o durumda altküme fontta hiç küçük
+    // harf bulunmaz. Böyle satırlarda güvenilir sayı büyük harf sütunudur.
+    const etiket={
+      olculdu:'', yuvarlak:'yuvarlak harften ölçüldü',
+      tahmini:g.font.cap?'küçük harf yok — x tahmini':'ölçülemedi — tahmini',
+      'gomulu-degil':'font gömülü değil', type3:'Type3 — ölçülemedi'
+    }[g.font.kaynak]||'';
+    return `<tr style="background:${g.kalir?'#fff5f5':'#fff'}">
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;text-align:center">${g.sayfa}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${kacir(g.metin)}">${kacir(g.metin)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;font-size:11px;color:#666">${kacir(g.font.ad)}${etiket?'<br><span style="color:#b26a00">'+kacir(etiket)+'</span>':''}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;text-align:right">${g.punto.toFixed(1)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;text-align:right;font-weight:700;color:${g.kalir?'#c62828':'#2e7d32'}">${mm(g.xmm)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;text-align:right;color:#666">${mm(g.capmm)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eef1f6;text-align:center">${g.adet}</td>
+    </tr>`;
+  }).join('');
+
+  const sy=sayfalar[0];
+  document.getElementById('fk-sonuc').innerHTML=ozet+uyari+
+    `<div style="font-size:11px;color:#888;margin:10px 0 6px">
+       ${kacir(dosyaAdi)} · ${sayfalar.length} sayfa · sayfa boyutu ${sy.en.toFixed(1)} × ${sy.boy.toFixed(1)} mm${olcek!==1?' (ölçek %'+(olcek*100).toFixed(0)+' uygulandı)':''}
+       <br>Sayfa boyutu gerçek çıktı ölçüsüyle uyuşmuyorsa ölçek alanını düzeltin — milimetre değerleri doğrudan buna bağlıdır.
+     </div>
+     <div style="max-height:340px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;display:${gruplar.length?'block':'none'}">
+       <table style="width:100%;border-collapse:collapse;font-size:12px">
+         <thead><tr style="background:#f5f7fa;position:sticky;top:0">
+           <th style="padding:7px 8px;text-align:center;font-size:11px;color:#555">Sayfa</th>
+           <th style="padding:7px 8px;text-align:left;font-size:11px;color:#555">Örnek metin</th>
+           <th style="padding:7px 8px;text-align:left;font-size:11px;color:#555">Font</th>
+           <th style="padding:7px 8px;text-align:right;font-size:11px;color:#555">Punto</th>
+           <th style="padding:7px 8px;text-align:right;font-size:11px;color:#555">x-yük. (mm)</th>
+           <th style="padding:7px 8px;text-align:right;font-size:11px;color:#555">Büyük harf (mm)</th>
+           <th style="padding:7px 8px;text-align:center;font-size:11px;color:#555">Adet</th>
+         </tr></thead>
+         <tbody>${satirlar}</tbody>
+       </table>
+     </div>`;
+  document.getElementById('fk-sonuc').style.display='block';
 }
 
 // --- AI ASISTAN ---
@@ -6062,6 +6303,36 @@ if(document.readyState==='loading'){
         </div>
       </div>
       <div id="kars-durum" style="display:none;font-size:13px;color:#1565c0;padding:10px 14px;background:#e3f2fd;border-radius:8px;margin-bottom:14px"></div>
+
+      <!-- Minimum font kontrolü: karşılaştırmadan bağımsız çalışır -->
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px;background:#fafbfc">
+        <div style="font-size:13px;font-weight:700;color:#1a237e;margin-bottom:4px">📏 Minimum Font Kontrolü (x-yüksekliği)</div>
+        <div style="font-size:11px;color:#888;margin-bottom:12px">
+          Seçtiğiniz PDF'teki her metin, gömülü fontun gerçek x-yüksekliği üzerinden milimetreye çevrilir ve standardın altında kalanlar listelenir.
+          Punto tek başına yeterli değildir: aynı puntoda iki yazı karakterinin x-yüksekliği %20'ye varan fark gösterebilir.
+          <b>Yazıları eğriye çevrilmiş (outline) bölgeler ölçülemez</b> — rapor bunu ayrıca belirtir.
+        </div>
+        <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+          <div>
+            <div class="lbl">Dosya</div>
+            <select id="fk-dosya" style="width:120px"><option value="a">Dosya A</option><option value="b">Dosya B</option></select>
+          </div>
+          <div>
+            <div class="lbl">Standart x-yüksekliği (mm)</div>
+            <input type="number" id="fk-esik" value="1.2" step="0.1" min="0.1" style="width:130px">
+          </div>
+          <div>
+            <div class="lbl">Çıktı ölçeği (%)</div>
+            <input type="number" id="fk-olcek" value="100" step="1" min="1" style="width:110px">
+          </div>
+          <button onclick="fontKontrolCalistir()" id="fk-btn" style="background:#00695c;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer">Ölç</button>
+          <div style="font-size:11px;color:#999;flex:1;min-width:200px">
+            Gıda etiketlerinde zorunlu bilgiler için yaygın standart 1,2 mm; en geniş yüzeyi 80 cm²'nin altındaki ambalajlarda 0,9 mm.
+          </div>
+        </div>
+        <div id="fk-durum" style="display:none;font-size:12px;color:#1565c0;padding:9px 13px;background:#e3f2fd;border-radius:8px;margin-top:12px"></div>
+        <div id="fk-sonuc" style="display:none;margin-top:14px"></div>
+      </div>
       <div id="kars-sonuc" style="display:none">
         <div id="kars-ozet" style="font-size:14px;font-weight:700;padding:12px 16px;border-radius:8px;margin-bottom:16px"></div>
         <div style="font-size:11px;color:#888;margin-bottom:10px">💡 Görsellerden birine tıklayın: tam ekran açılır, yakınlaştırıp sürükleyebilir ve aynı noktada A / B / Farklar arasında geçiş yapabilirsiniz.</div>
