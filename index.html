@@ -4732,6 +4732,8 @@ async function adimEkle(){
     renderDetayAdimlar();
     renderGorevler();
     alert('⚠ Adım veritabanına kaydedilemedi ve eklenmedi. Lütfen ekrandaki hata mesajını kontrol edin (muhtemelen eksik bir sütun var).');
+  }else{
+    adimAtamaBildir(yeni);   // atanan varsa haber verilir
   }
 }
 async function adimSil(id){
@@ -4852,11 +4854,16 @@ async function adimZorlukGuncelle(adimId,zorluk){
 async function adimAlanGuncelle(adimId,alan,deger){
   const a=urunAdimlar.find(x=>x.id===adimId);if(!a)return;
   if(!adimBenimMi(a)){adimKilitUyari(a);renderDetayAdimlar();return;}
+  const onceki=a[alan];
   a[alan]=deger;
   renderDetayAdimlar();
   renderGorevler();
   const ok=await sbPatch('urun_adimlar','id',adimId,{[alan]:deger});
-  if(ok!==false&&alan==='atanan'&&deger)sbToast('✔ Adım "'+a.ad+'" → '+deger);
+  if(ok!==false&&alan==='atanan'&&deger){
+    sbToast('✔ Adım "'+a.ad+'" → '+deger);
+    // Aynı kişi yeniden seçildiyse bildirim gitmez; atama değişmemiştir.
+    if(deger!==onceki)adimAtamaBildir(a);
+  }
 }
 // Adımı müşteri onay adımı yapar/geri alır. İşaretli adımı markanın müşteri
 // kullanıcısı görür ve onaylar; ekip bu adımın durumunu yine değiştirebilir.
@@ -5037,6 +5044,90 @@ async function dosyaSil(id,dosyaYolu,dosyaAdi){
 }
 
 // --- ADIM BILDIRIMI (E-POSTA) ---
+/*
+  Gönderimin kendisi. Alıcı kısıtı sunucu tarafında: send-notification yalnızca
+  personeller tablosunda kayıtlı adreslere yollar, o yüzden burada adres
+  doğrulaması tekrarlanmıyor. Buranın işi sonucu ÇAĞIRANA döndürmek — eskiden
+  hata yalnızca konsola yazılıyordu, kullanıcı bildirimin gidip gitmediğini
+  bilmiyordu.
+*/
+async function bildirimYolla(to,subject,html){
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/send-notification`,{
+      method:'POST',headers:SBH(),body:JSON.stringify({to,subject,html})
+    });
+    if(r.ok)return {ok:true};
+    const j=await r.json().catch(()=>({}));
+    console.warn('Bildirim gonderilemedi:',r.status,j);
+    const h=j&&j.error;
+    return {ok:false,hata:(h&&(h.message||h.error||h))||('HTTP '+r.status)};
+  }catch(e){
+    console.warn('Bildirim gonderme hatasi:',e);
+    return {ok:false,hata:e.message};
+  }
+}
+// Tüm bildirim e-postalarının ortak gövdesi.
+function bildirimGovdesi({ad,giris,kart,gorev,tarih,ekNot}){
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
+      <div style="background:#1565c0;padding:18px 24px;border-radius:10px 10px 0 0">
+        <div style="color:#fff;font-size:16px;font-weight:700">Lokasyon İstanbul Operasyon Paneli</div>
+      </div>
+      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;padding:22px 24px">
+        <p style="font-size:14px;color:#333;margin:0 0 14px">Merhaba <strong>${kacir(ad)}</strong>,</p>
+        <p style="font-size:14px;color:#333;margin:0 0 14px">${giris}</p>
+        <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Ürün Kartı</div>
+          <div style="font-size:15px;font-weight:700;color:#1a237e;margin-bottom:10px">${kacir(kart)}</div>
+          <div style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Görev</div>
+          <div style="font-size:15px;font-weight:700;color:#333">${kacir(gorev)}</div>
+          ${tarih?`<div style="font-size:12px;color:#e65100;margin-top:8px">📅 Hedef Tarih: ${kacir(tarih)}</div>`:''}
+          ${ekNot?`<div style="font-size:12px;color:#666;margin-top:8px">${kacir(ekNot)}</div>`:''}
+        </div>
+        <p style="font-size:12px;color:#aaa;margin:0">Bu e-posta Operasyon Paneli tarafından otomatik gönderilmiştir.</p>
+      </div>
+    </div>`;
+}
+
+/*
+  ATAMA BİLDİRİMİ — bir adım bir personele atandığı anda o kişiye e-posta gider.
+  İki yerden çağrılır: yeni adım eklenirken ve mevcut adımın atananı
+  değiştirilirken.
+
+  Bu, "sıra sana geldi" bildiriminden (sonrakiAdimBildir) farklı bir olaydır:
+  o, önceki adım tamamlanınca gider. Atama bildirimi ise kişinin işi takvimine
+  önceden görebilmesi içindir.
+
+  Kendine atamada gönderilmez: kişi zaten ekranın başında, kendi yaptığı
+  işlemin e-postasını almak yalnızca gürültü olur.
+
+  E-postası kayıtlı olmayan personelde sessiz kalınmıyor. Ekipte adresi olmayan
+  kişiler var; uyarı olmasa atamayı yapan "bildirim gitti" sanır ve iş
+  kimseye ulaşmaz.
+*/
+async function adimAtamaBildir(adim){
+  if(!adim||!adim.atanan)return;
+  if(adim.atanan===aktifPersonelAdi())return;
+  const personel=personeller.find(p=>p.ad===adim.atanan);
+  if(!personel||!personel.email){
+    sbToast('⚠ '+adim.atanan+' için e-posta adresi kayıtlı değil — bildirim gönderilemedi. Veri Yönetimi › Personel bölümünden ekleyebilirsiniz.');
+    return;
+  }
+  const kart=urunKartlari.find(k=>k.id===adim.kart_id);
+  const kartBaslik=kart?((kart.kod?kart.kod+' — ':'')+kart.ad):'—';
+  const subject=`Size yeni bir adım atandı: ${adim.ad}${kart?' — '+(kart.kod||kart.ad):''}`;
+  const html=bildirimGovdesi({
+    ad:personel.ad,
+    giris:'Operasyon panelinde size yeni bir adım atandı:',
+    kart:kartBaslik, gorev:adim.ad, tarih:adim.tarih,
+    ekNot:adim.sure?('Öngörülen süre: '+adim.sure+' dk'):''
+  });
+  const s=await bildirimYolla(personel.email,subject,html);
+  sbToast(s.ok
+    ? '📧 '+adim.atanan+' e-posta ile bilgilendirildi'
+    : '⚠ '+adim.atanan+' için bildirim gönderilemedi: '+s.hata);
+}
+
 async function sonrakiAdimBildir(tamamlananAdimId){
   const tamamlanan=urunAdimlar.find(a=>a.id===tamamlananAdimId);
   if(!tamamlanan)return;
@@ -5051,41 +5142,16 @@ async function sonrakiAdimBildir(tamamlananAdimId){
   const personel=personeller.find(p=>p.ad===sonraki.atanan);
   if(!personel||!personel.email)return; // email kayitli degil
 
-  const subject=`Yeni Göreviniz Hazır: ${kacir(sonraki.ad)} — ${kacir(kart.kod||'')} ${kacir(kart.ad)}`.trim();
-  const html=`
-    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
-      <div style="background:#1565c0;padding:18px 24px;border-radius:10px 10px 0 0">
-        <div style="color:#fff;font-size:16px;font-weight:700">Lokasyon İstanbul Operasyon Paneli</div>
-      </div>
-      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;padding:22px 24px">
-        <p style="font-size:14px;color:#333;margin:0 0 14px">Merhaba <strong>${kacir(personel.ad)}</strong>,</p>
-        <p style="font-size:14px;color:#333;margin:0 0 14px">
-          <strong>"${kacir(tamamlanan.ad)}"</strong> adımı tamamlandı ve senin sıradaki göreve geçebilirsin:
-        </p>
-        <div style="background:#f8fafc;border-radius:8px;padding:14px 16px;margin-bottom:16px">
-          <div style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Ürün Kartı</div>
-          <div style="font-size:15px;font-weight:700;color:#1a237e;margin-bottom:10px">${kacir(kart.kod?kart.kod+' — ':'')}${kacir(kart.ad)}</div>
-          <div style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Görev</div>
-          <div style="font-size:15px;font-weight:700;color:#333">${kacir(sonraki.ad)}</div>
-          ${sonraki.tarih?`<div style="font-size:12px;color:#e65100;margin-top:8px">📅 Hedef Tarih: ${sonraki.tarih}</div>`:''}
-        </div>
-        <p style="font-size:12px;color:#aaa;margin:0">Bu e-posta Operasyon Paneli tarafından otomatik gönderilmiştir.</p>
-      </div>
-    </div>`;
-
-  try{
-    const r=await fetch(`${SB_URL}/functions/v1/send-notification`,{
-      method:'POST',
-      headers:SBH(),
-      body:JSON.stringify({to:personel.email,subject,html})
-    });
-    if(!r.ok){
-      const j=await r.json().catch(()=>({}));
-      console.warn('Bildirim gonderilemedi:',r.status,j);
-    }
-  }catch(e){
-    console.warn('Bildirim gonderme hatasi:',e);
-  }
+  // Konu satırı düz metindir; kacir() HTML kaçırması burada "&" gibi
+  // karakterleri "&amp;" olarak gösteriyordu.
+  const subject=`Yeni Göreviniz Hazır: ${sonraki.ad} — ${kart.kod||''} ${kart.ad}`.trim();
+  const html=bildirimGovdesi({
+    ad:personel.ad,
+    giris:`<strong>"${kacir(tamamlanan.ad)}"</strong> adımı tamamlandı ve senin sıradaki göreve geçebilirsin:`,
+    kart:(kart.kod?kart.kod+' — ':'')+kart.ad,
+    gorev:sonraki.ad, tarih:sonraki.tarih
+  });
+  await bildirimYolla(personel.email,subject,html);
 }
 
 // --- DOKUMAN NOTLARI (PDF/gorsel uzerine isaretleme) -------------------------
