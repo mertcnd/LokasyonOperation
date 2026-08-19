@@ -879,7 +879,16 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:18px">
     <div class="logo" role="img" aria-label="Lokasyon İstanbul" style="height:52px"></div>
     <h1 style="margin-bottom:0">Operasyon Paneli</h1>
-  </div><div style="display:flex;align-items:center;gap:12px"><div style="font-size:12px;color:#888;text-align:right"><div id="header-kullanici-adi" style="font-size:13px;font-weight:700;color:#1a237e"></div><div id="header-kullanici-rol" style="font-size:11px;color:#aaa"></div></div><button id="tema-btn" onclick="temaDegistir()" class="tema-btn" title="Gündüz / gece görünümü"></button><button id="sifre-degistir-btn" onclick="sifremiDegistir()" title="Şifrenizi değiştirin" style="display:none;background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:#555">🔑 Şifrem</button><button onclick="authCikis()" style="background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:#555">Çıkış</button></div></div>
+  </div><div style="display:flex;align-items:center;gap:12px"><div style="font-size:12px;color:#888;text-align:right"><div id="header-kullanici-adi" style="font-size:13px;font-weight:700;color:#1a237e"></div><div id="header-kullanici-rol" style="font-size:11px;color:#aaa"></div></div><div id="zil-sarmal" style="position:relative;display:none">
+      <button id="zil-btn" onclick="bildirimPaneliAcKapa(event)" class="tema-btn" title="Bildirimler" style="padding:6px 12px">🔔<span id="zil-rozet" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--kirmizi-dolgu);color:#fff;border-radius:10px;min-width:17px;height:17px;font-size:10px;font-weight:800;line-height:17px;text-align:center;padding:0 4px"></span></button>
+      <div id="bildirim-paneli" style="display:none;position:absolute;top:40px;right:0;width:380px;max-height:460px;background:var(--yuzey);border:1px solid var(--cizgi);border-radius:12px;box-shadow:0 10px 40px var(--golge2);z-index:9995;overflow:hidden;flex-direction:column">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--cizgi);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700;color:var(--lacivert)">🔔 Bildirimler</div>
+          <button onclick="bildirimlerTumunuOku()" id="zil-tumu-btn" style="background:none;border:none;color:var(--vurgu);font-size:11px;font-weight:600;cursor:pointer">Tümünü okundu işaretle</button>
+        </div>
+        <div id="bildirim-liste" style="overflow-y:auto;flex:1"></div>
+      </div>
+    </div><button id="tema-btn" onclick="temaDegistir()" class="tema-btn" title="Gündüz / gece görünümü"></button><button id="sifre-degistir-btn" onclick="sifremiDegistir()" title="Şifrenizi değiştirin" style="display:none;background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:#555">🔑 Şifrem</button><button onclick="authCikis()" style="background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:#555">Çıkış</button></div></div>
   <div class="tabs" id="tab-bar">
     <div class="tab active" onclick="switchTab('gunluk')">Günlük Durum</div>
     <div class="tab" onclick="switchTab('takvim')">İzinler</div>
@@ -2122,6 +2131,116 @@ function temaDugmesiniGuncelle(){
   b.title=gece?'Gündüz görünümüne geç':'Gece görünümüne geç';
 }
 
+/* ── PANEL İÇİ BİLDİRİMLER ───────────────────────────────────────────────────
+  Müşteri bir adımı reddettiğinde (RET), işi yapan kişiye buradan bildirim
+  düşer. E-posta gitmez — reddedilen iş ekibin kendi akışında görünmeli.
+
+  Bildirimi PANEL YAZMAZ, musteri-onay Edge Function'ı yazar. bildirimler
+  tablosunda INSERT politikası bilerek yok: olsaydı bir kullanıcı bir başkası
+  adına sahte bildirim üretebilirdi. Panelin yaptığı tek şey okumak ve
+  "okundu" işaretlemek; RLS de zaten kişinin yalnızca kendi satırlarını
+  görmesine izin veriyor.
+
+  Alıcı personel ADI üzerinden eşleşiyor (urun_adimlar.atanan ile aynı alan).
+  Personel bağlantısı olmayan hesap bildirim alamaz; zil de o hesapta
+  gösterilmiyor, yoksa hep boş bir zil dururdu.
+──────────────────────────────────────────────────────────────────────────── */
+const BILDIRIM_ARALIK=60*1000;
+let bildirimler=[], bildirimZamanlayici=null;
+
+function bildirimAlabilirMi(){
+  return !musteriMi() && !!aktifPersonelAdi();
+}
+async function bildirimleriYukle(){
+  if(!bildirimAlabilirMi())return;
+  try{
+    bildirimler=await sbGet('bildirimler','order=tarih.desc&limit=50');
+  }catch(e){ console.warn('bildirimler okunamadı:',e); return; }
+  zilRozetiGuncelle();
+  if(document.getElementById('bildirim-paneli').style.display==='flex')bildirimListesiCiz();
+}
+function okunmamisSayi(){ return bildirimler.filter(b=>!b.okundu).length; }
+function zilRozetiGuncelle(){
+  const sarmal=document.getElementById('zil-sarmal');
+  if(!sarmal)return;
+  sarmal.style.display=bildirimAlabilirMi()?'block':'none';
+  const r=document.getElementById('zil-rozet');
+  const n=okunmamisSayi();
+  r.textContent=n>99?'99+':n;
+  r.style.display=n?'block':'none';
+}
+function bildirimPaneliAcKapa(ev){
+  if(ev)ev.stopPropagation();
+  const p=document.getElementById('bildirim-paneli');
+  const acik=p.style.display==='flex';
+  p.style.display=acik?'none':'flex';
+  if(!acik){ bildirimListesiCiz(); bildirimleriYukle(); }
+}
+// Panel dışına tıklanınca kapanır
+document.addEventListener('click',e=>{
+  const p=document.getElementById('bildirim-paneli');
+  if(!p||p.style.display!=='flex')return;
+  if(!e.target.closest('#zil-sarmal'))p.style.display='none';
+});
+
+function bildirimListesiCiz(){
+  const c=document.getElementById('bildirim-liste');
+  if(!c)return;
+  if(!bildirimler.length){
+    c.innerHTML='<div style="padding:26px 16px;text-align:center;font-size:12px;color:var(--yazi4);font-style:italic">Bildirim yok.</div>';
+    return;
+  }
+  c.innerHTML=bildirimler.map(b=>{
+    const yeni=!b.okundu;
+    return `<div onclick="bildirimAc('${jsKacir(b.id)}')" style="padding:11px 14px;border-bottom:1px solid var(--cizgi);cursor:pointer;background:${yeni?'var(--mavi-zemin)':'transparent'}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+        <div style="font-size:12px;font-weight:700;color:${yeni?'var(--vurgu)':'var(--yazi2)'};line-height:1.4">${yeni?'● ':''}${kacir(b.baslik)}</div>
+        <div style="font-size:10px;color:var(--yazi4);white-space:nowrap;flex-shrink:0">${gecenSure(b.tarih)}</div>
+      </div>
+      ${b.metin?`<div style="font-size:11px;color:var(--yazi3);margin-top:4px;line-height:1.5;white-space:pre-line">${kacir(b.metin)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+async function bildirimAc(id){
+  const b=bildirimler.find(x=>x.id===id);if(!b)return;
+  document.getElementById('bildirim-paneli').style.display='none';
+  if(!b.okundu){
+    b.okundu=true; zilRozetiGuncelle();
+    sbPatchSilent('bildirimler','id',id,{okundu:true});
+  }
+  if(!b.kart_id)return;
+  const kart=urunKartlari.find(k=>k.id===b.kart_id);
+  if(!kart){ sbToast('Bildirimdeki çalışma açılamadı; arşivlenmiş olabilir.'); return; }
+  switchTab('urun');
+  kartDetayAc(b.kart_id);
+  if(b.adim_id&&urunAdimlar.some(a=>a.id===b.adim_id)){
+    if(expandedAdimId!==b.adim_id)adimExpand(b.adim_id);
+    setTimeout(()=>{
+      const el=document.getElementById('adim-krt-'+b.adim_id);
+      if(!el)return;
+      el.scrollIntoView({block:'center',behavior:'smooth'});
+      el.style.boxShadow='0 0 0 3px #ffb300';
+      setTimeout(()=>{el.style.boxShadow='';},2600);
+    },260);
+  }
+}
+async function bildirimlerTumunuOku(){
+  const okunmamis=bildirimler.filter(b=>!b.okundu);
+  if(!okunmamis.length)return;
+  okunmamis.forEach(b=>{b.okundu=true});
+  zilRozetiGuncelle(); bildirimListesiCiz();
+  for(const b of okunmamis)await sbPatchSilent('bildirimler','id',b.id,{okundu:true});
+}
+function bildirimIzlemeBaslat(){
+  zilRozetiGuncelle();
+  if(!bildirimAlabilirMi())return;
+  bildirimleriYukle();
+  if(bildirimZamanlayici)clearInterval(bildirimZamanlayici);
+  bildirimZamanlayici=setInterval(bildirimleriYukle,BILDIRIM_ARALIK);
+  // Sekmeye dönüldüğünde de bakılır: kullanıcı asıl o an işe başlıyor.
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden)bildirimleriYukle(); });
+}
+
 /* ── SÜRÜM DENETİMİ ──────────────────────────────────────────────────────────
   Bildirim e-postalarının HTML'i sunucuda değil TARAYICIDA üretiliyor. Panel
   tek dosyalık olduğu için, sekme günlerce açık kaldığında sunucudaki sürüm
@@ -2868,6 +2987,7 @@ async function init(){
   derinBaglantiUygula();   // e-postadan gelindiyse ilgili adımı aç
   surumIzlemeBaslat();
   temaDugmesiniGuncelle();
+  bildirimIzlemeBaslat();
 }
 
 /*

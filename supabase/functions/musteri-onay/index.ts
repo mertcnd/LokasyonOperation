@@ -20,6 +20,10 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "onboarding@resend.dev"
 const REPLY_TO = Deno.env.get("REPLY_TO_EMAIL") || ""
+// Maildeki dugme panelde ilgili adimi dogrudan acar (bkz. derinBaglantiUygula)
+const PANEL_ADRESI = "https://panel.lokasyonistanbul.com"
+const adimBaglantisi = (kartId: string, adimId?: string) =>
+  `${PANEL_ADRESI}/#kart=${encodeURIComponent(kartId)}${adimId ? `&adim=${encodeURIComponent(adimId)}` : ""}`
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -99,7 +103,7 @@ function kacir(s: string) {
 
 function mailGovdesi(o: {
   baslik: string; renk: string; kisi: string; giris: string
-  kart: string; adim: string; not?: string; tarih?: string
+  kart: string; adim: string; not?: string; tarih?: string; baglanti?: string
 }) {
   return `
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
@@ -120,6 +124,13 @@ function mailGovdesi(o: {
           <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Musteri notu</div>
           <div style="font-size:13px;color:#333;line-height:1.6">${kacir(o.not)}</div>
         </div>` : ""}
+        ${o.baglanti ? `
+        <div style="text-align:center;margin-bottom:18px">
+          <a href="${kacir(o.baglanti)}" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 26px;border-radius:8px">Adimi panelde ac &rarr;</a>
+        </div>
+        <p style="font-size:11px;color:#aaa;margin:0 0 14px;word-break:break-all;text-align:center">
+          Dugme calismazsa: <a href="${kacir(o.baglanti)}" style="color:#1565c0">${kacir(o.baglanti)}</a>
+        </p>` : ""}
         <p style="font-size:12px;color:#aaa;margin:0">Bu e-posta Operasyon Paneli tarafindan otomatik gonderilmistir.</p>
       </div>
     </div>`
@@ -192,6 +203,81 @@ serve(async (req) => {
       ? tumAdimlar.find((a) => a.sira > adim.sira)   // sonraki adim
       : adim                                        // revizyonda adimin sahibi
 
+    /*
+      RET durumunda ISI YAPAN KISIYE haber verilir: hem panel bildirimi hem
+      e-posta. Alici, musteri onay adiminin BIR ONCEKI adimindaki kisidir --
+      onay adimi bir kontrol noktasidir, duzeltilecek is ondan once
+      yapilmistir. Onceki adimda atanan yoksa daha geriye dogru bakilir
+      ("kim varsa").
+
+      Panel bildirimi service role ile yaziliyor; bildirimler tablosunda
+      INSERT politikasi bilerek yok, boylece panelden kimse baskasi adina
+      sahte bildirim uretemiyor.
+
+      Kisi zaten onay adiminin da sahibiyse tekrar yazilmaz/gonderilmez:
+      asagidaki blok ona ayrica haber veriyor.
+    */
+    if (karar === "revizyon") {
+      const oncekiler = tumAdimlar.filter((a) => a.sira < adim.sira && String(a.atanan || "").trim())
+      const onceki = oncekiler.length ? oncekiler[oncekiler.length - 1] : null
+      if (onceki?.atanan && onceki.atanan !== hedefAdim?.atanan) {
+        // Musterinin bu karttaki acik PDF notlari: alici belgeye bakmali mi?
+        let dnotSayi = 0
+        try {
+          const notlar = await rest<{ id: string }>(
+            `dokuman_notlari?kart_id=eq.${encodeURIComponent(adim.kart_id)}` +
+            `&yazan=eq.${encodeURIComponent(kisi)}&durum=neq.${encodeURIComponent("Çözüldü")}&select=id`)
+          dnotSayi = notlar.length
+        } catch (e) { console.warn("dokuman notlari okunamadi", e) }
+
+        const govde = [
+          `"${adim.ad}" adımı için ${kisi} revizyon istedi.`,
+          String(not || "").trim() ? `Müşteri notu: ${String(not).trim()}` : "",
+          dnotSayi ? `Belge üzerinde müşterinin ${dnotSayi} açık notu var.` : "",
+        ].filter(Boolean).join("\n")
+
+        const b = await fetch(`${SB_URL}/rest/v1/bildirimler`, {
+          method: "POST", headers: { ...srv, Prefer: "return=minimal" },
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            alici: onceki.atanan,
+            tip: "musteri_ret",
+            baslik: `Müşteri revizyon istedi — ${kartAdi}`,
+            metin: govde,
+            kart_id: adim.kart_id,
+            adim_id: onceki.id,        // kisinin kendi adimina goturur
+            olusturan: kisi,
+          }),
+        })
+        if (!b.ok) console.warn("bildirim yazilamadi", b.status, await b.text())
+
+        // Ayni kisiye e-posta. Adresi kayitli degilse panel bildirimi yine
+        // durdugu icin haber tumuyle kaybolmuyor.
+        const oncekiKisiler = await rest<{ ad: string; email?: string }>(
+          `personeller?ad=eq.${encodeURIComponent(onceki.atanan)}&select=ad,email`)
+        const oncekiEposta = oncekiKisiler[0]?.email
+        if (oncekiEposta) {
+          await mailGonder(
+            oncekiEposta,
+            `Müşteri Revizyon İstedi: ${kartAdi}`,
+            mailGovdesi({
+              baslik: "Lokasyon İstanbul Operasyon Paneli",
+              renk: "#c62828",
+              kisi: onceki.atanan,
+              giris: `<strong>"${kacir(adim.ad)}"</strong> adımında müşteri revizyon istedi. ` +
+                `Düzeltilmesi gereken iş senin <strong>"${kacir(onceki.ad)}"</strong> adımında:` +
+                (dnotSayi ? ` Belge üzerinde müşterinin ${dnotSayi} açık notu var.` : ""),
+              kart: kartAdi,
+              adim: onceki.ad,
+              not: String(not || "").trim() || undefined,
+              tarih: onceki.tarih || undefined,
+              baglanti: adimBaglantisi(adim.kart_id, onceki.id),
+            }),
+          )
+        }
+      }
+    }
+
     if (hedefAdim?.atanan) {
       const kisiler = await rest<{ ad: string; email?: string }>(
         `personeller?ad=eq.${encodeURIComponent(hedefAdim.atanan)}&select=ad,email`)
@@ -214,6 +300,7 @@ serve(async (req) => {
             adim: hedefAdim.ad,
             not: String(not || "").trim() || undefined,
             tarih: hedefAdim.tarih || undefined,
+            baglanti: adimBaglantisi(adim.kart_id, hedefAdim.id),
           }),
         )
       }
