@@ -84,6 +84,27 @@ grant  execute on function public.yedek_prova_yukle(jsonb) to service_role;
 -- ── Zamanlanmış işler ───────────────────────────────────────────────────────
 --   1  haftalik-yedek   0 21 */2 * *   (2 günde bir, TR gece yarısı)
 --   2  haftalik-ozet    0 5 * * 1      (pazartesi 08:00 TR)
---   3  cron-izleme      0 6 * * *      (her gün 09:00 TR)
+--   3  cron-izleme      0 */3 * * *    (3 saatte bir)
 -- Her iş istek kimliğini zamanli_is_kaydi'ya yazar; izleme sonradan gerçek
 -- HTTP yanıtını işler ve başarısızlık varsa yöneticiye mail atar.
+--
+-- ⚠ İZLEME NEDEN 3 SAATTE BİR (düzeltme: 20.08.2026)
+-- pg_net, HTTP yanıtlarını yalnızca `pg_net.ttl` kadar (bu projede 6 SAAT)
+-- saklıyor, sonra siliyor. İzleme günde bir kez 06:00'da çalışıyordu; 21:00'de
+-- başlayan yedeğin yanıtına 9 saat sonra bakıyordu ve yanıt çoktan silinmiş
+-- oluyordu. Fonksiyon da bunu "yanıt alınamadı (zaman aşımı)" sayıp yöneticiye
+-- BAŞARISIZ maili atıyordu — oysa yedek alınmıştı. 19.08'de tam bu oldu;
+-- 17.08'de tutmasının sebebi şanstı, pg_net'in temizliği henüz çalışmamıştı.
+--
+-- 3 saatte bir bakınca en kötü gecikme 3 saat, TTL'in yarısı.
+-- Sık çalıştırmak güvenli: zamanli_is_kontrol() yalnızca kontrol_at'i boş
+-- satırları işliyor ve yalnızca son 2 dakikada işaretlenenleri raporluyor,
+-- yani her iş bir kez denetlenip en fazla bir kez bildiriliyor.
+--
+-- İşin gerçekten başarılı olduğu ayrıca doğrulandı: yedek-prova en güncel
+-- yedeği ayrı bir şemaya geri yükleyip satır sayılarını karşılaştırıyor;
+-- 19.08 yedeğinde 19 tablonun tamamında yedekteki = geri yüklenen çıktı.
+select cron.alter_job(
+  (select jobid from cron.job where jobname='cron-izleme'),
+  schedule := '0 */3 * * *'
+);
