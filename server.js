@@ -57,12 +57,21 @@ const GUVENLIK_BASLIKLARI = {
 const crypto = require('crypto');
 let SURUM = 'bilinmiyor';
 try {
-  SURUM = crypto.createHash('sha1').update(fs.readFileSync(FILE)).digest('hex').slice(0, 12);
+  SURUM = crypto.createHash('sha1').update(fs.readFileSync(FILE)).update(fs.readFileSync(path.join(__dirname,'workflow-core.js'))).update(fs.readFileSync(path.join(__dirname,'workflow-ui.js'))).update(fs.readFileSync(path.join(__dirname,'workflow.css'))).digest('hex').slice(0, 12);
 } catch (e) {
   console.error('Sürüm özeti hesaplanamadı:', e.message);
 }
 
 http.createServer((req, res) => {
+  const pathname = new URL(req.url, 'http://localhost').pathname;
+  const assets = {'/workflow-core.js':'application/javascript','/workflow-ui.js':'application/javascript','/workflow.css':'text/css'};
+  if (assets[pathname]) {
+    fs.readFile(path.join(__dirname, pathname.slice(1)), (err, data) => {
+      res.writeHead(err ? 404 : 200, {...GUVENLIK_BASLIKLARI,'Content-Type':assets[pathname]+'; charset=utf-8','Cache-Control':'no-cache'});
+      res.end(err ? 'Not found' : data);
+    });
+    return;
+  }
   if (req.url === '/surum' || req.url.startsWith('/surum?')) {
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',

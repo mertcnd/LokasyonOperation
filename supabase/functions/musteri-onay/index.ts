@@ -47,6 +47,7 @@ type Kullanici = {
 type Adim = {
   id: string; kart_id: string; sira: number; ad: string
   atanan?: string; durum?: string; tarih?: string; musteri_adimi?: boolean
+  arsivlendi?: boolean; wf_bagimliliklar?: string[]
 }
 
 function markalariCoz(u: Kullanici): string[] {
@@ -72,12 +73,8 @@ async function cagiraniBul(req: Request, govdeId?: string): Promise<Kullanici | 
     return satir[0] ?? null
   }
 
-  if (!govdeId) return null
-  const satir = await rest<Kullanici>(`kullanicilar?id=eq.${encodeURIComponent(govdeId)}&select=*`)
-  const k = satir[0]
-  if (!k) return null
-  if (k.auth_uid) return null   // Auth'a tasinmis hesap jetonsuz kabul edilmez
-  return k
+  return null // Eski kimliksiz kullanıcı eşlemesi artık kabul edilmez.
+
 }
 
 async function mailGonder(to: string, subject: string, html: string) {
@@ -140,7 +137,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors })
 
   try {
-    const { adim_id, karar, not, kullanici_id } = await req.json()
+    const { adim_id, karar, not, kullanici_id, paket_id } = await req.json()
     if (!adim_id || (karar !== "onay" && karar !== "revizyon")) {
       return json({ error: "Eksik veya gecersiz alan" }, 400)
     }
@@ -166,60 +163,38 @@ serve(async (req) => {
     if (!kart.marka || !izinli.includes(kart.marka)) {
       return json({ error: "Bu calisma sizin markalariniza ait degil" }, 403)
     }
-    if (karar === "onay" && adim.durum === "Tamamlandı") {
-      return json({ error: "Bu adim zaten onaylanmis" }, 409)
-    }
-
-    const yeniDurum = karar === "onay" ? "Tamamlandı" : "RET"
+    if (!paket_id) return json({ error: "Güncel onay paketini açmak için paneli yenileyin." }, 409)
+    // Karar + dosya sürümleri + revizyon işi + not + panel bildirimi tek transaction.
+    // Kullanıcının JWT'si korunur; servis anahtarıyla yetki denetimi atlanmaz.
+    const sonuc = await fetch(`${SB_URL}/rest/v1/rpc/workflow_v2`, {
+      method: "POST",
+      headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization") || "", "Content-Type": "application/json" },
+      body: JSON.stringify({ islem: "karar", veri: { adim_id, paket_id, karar, not } }),
+    })
+    const kayit = await sonuc.json()
+    if (!sonuc.ok) return json({ error: kayit.message || "Karar kaydedilemedi." }, 409)
+    const yeniDurum = kayit.durum
     const kisi = kullanici.ad_soyad || kullanici.kullanici_adi || "Müşteri"
     const kartAdi = `${kart.kod ? kart.kod + " — " : ""}${kart.ad}`
-
-    // 1) Adim durumu
-    const p = await fetch(`${SB_URL}/rest/v1/urun_adimlar?id=eq.${encodeURIComponent(adim_id)}`, {
-      method: "PATCH", headers: { ...srv, Prefer: "return=minimal" },
-      body: JSON.stringify({ durum: yeniDurum }),
-    })
-    if (!p.ok) return json({ error: `Durum guncellenemedi (${p.status})` }, 500)
-
-    // 2) Karar notu — kim, ne zaman, ne dedi
-    const notMetni = (karar === "onay" ? "✔ Onaylandı" : "↩ Revizyon istendi") +
-      (String(not || "").trim() ? ": " + String(not).trim() : "")
-    const notKaydi = {
-      id: crypto.randomUUID(),
-      adim_id,
-      metin: notMetni,
-      yazan: kisi,
-      tarih: new Date().toISOString().slice(0, 10),
-    }
-    await fetch(`${SB_URL}/rest/v1/urun_adim_notlari`, {
-      method: "POST", headers: { ...srv, Prefer: "return=minimal" },
-      body: JSON.stringify(notKaydi),
-    })
-
+    // Bundan sonraki e-posta sorunu kaydedilmiş kararı başarısız göstermez.
+    try {
     // 3) Bildirim
     const tumAdimlar = await rest<Adim>(
       `urun_adimlar?kart_id=eq.${encodeURIComponent(adim.kart_id)}&arsivlendi=is.false&select=*&order=sira.asc`)
-    const hedefAdim = karar === "onay"
-      ? tumAdimlar.find((a) => a.sira > adim.sira)   // sonraki adim
-      : adim                                        // revizyonda adimin sahibi
+    const grafVar = tumAdimlar.some((a) => (a.wf_bagimliliklar || []).length > 0)
+    const siradaki = grafVar
+      ? tumAdimlar.find((a) =>
+          a.durum !== "Tamamlandı" && !a.arsivlendi &&
+          (a.wf_bagimliliklar || []).includes(adim.id) &&
+          (a.wf_bagimliliklar || []).every((id) =>
+            tumAdimlar.find((b) => b.id === id)?.durum === "Tamamlandı"))
+      : tumAdimlar.find((a) => a.sira > adim.sira)
+    const hedefAdim = karar === "onay" ? siradaki : adim
 
-    /*
-      RET durumunda ISI YAPAN KISIYE haber verilir: hem panel bildirimi hem
-      e-posta. Alici, musteri onay adiminin BIR ONCEKI adimindaki kisidir --
-      onay adimi bir kontrol noktasidir, duzeltilecek is ondan once
-      yapilmistir. Onceki adimda atanan yoksa daha geriye dogru bakilir
-      ("kim varsa").
-
-      Panel bildirimi service role ile yaziliyor; bildirimler tablosunda
-      INSERT politikasi bilerek yok, boylece panelden kimse baskasi adina
-      sahte bildirim uretemiyor.
-
-      Kisi zaten onay adiminin da sahibiyse tekrar yazilmaz/gonderilmez:
-      asagidaki blok ona ayrica haber veriyor.
-    */
+    // Düzeltme sorumlusu onay paketinde seçilen üretim adımından gelir.
+    // Panel bildirimi SQL transaction'ında zaten yazılmıştır; burada yalnızca mail.
     if (karar === "revizyon") {
-      const oncekiler = tumAdimlar.filter((a) => a.sira < adim.sira && String(a.atanan || "").trim())
-      const onceki = oncekiler.length ? oncekiler[oncekiler.length - 1] : null
+      const onceki = tumAdimlar.find((a) => a.id === kayit.duzeltme_adim_id) || null
       if (onceki?.atanan && onceki.atanan !== hedefAdim?.atanan) {
         // Musterinin bu karttaki acik PDF notlari: alici belgeye bakmali mi?
         let dnotSayi = 0
@@ -235,21 +210,6 @@ serve(async (req) => {
           String(not || "").trim() ? `Müşteri notu: ${String(not).trim()}` : "",
           dnotSayi ? `Belge üzerinde müşterinin ${dnotSayi} açık notu var.` : "",
         ].filter(Boolean).join("\n")
-
-        const b = await fetch(`${SB_URL}/rest/v1/bildirimler`, {
-          method: "POST", headers: { ...srv, Prefer: "return=minimal" },
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            alici: onceki.atanan,
-            tip: "musteri_ret",
-            baslik: `Müşteri revizyon istedi — ${kartAdi}`,
-            metin: govde,
-            kart_id: adim.kart_id,
-            adim_id: onceki.id,        // kisinin kendi adimina goturur
-            olusturan: kisi,
-          }),
-        })
-        if (!b.ok) console.warn("bildirim yazilamadi", b.status, await b.text())
 
         // Ayni kisiye e-posta. Adresi kayitli degilse panel bildirimi yine
         // durdugu icin haber tumuyle kaybolmuyor.
@@ -306,11 +266,11 @@ serve(async (req) => {
       }
     }
 
-    return json({
-      success: true,
-      durum: yeniDurum,
-      not: { id: notKaydi.id, metin: notKaydi.metin, tarih: notKaydi.tarih, yazan: notKaydi.yazan },
-    })
+    } catch (mailError) {
+      console.warn("Karar kaydedildi; e-posta işlemi başarısız:", mailError)
+      return json({ ...kayit, bildirim_uyarisi: "Karar kaydedildi; e-posta gönderimi tamamlanamadı." })
+    }
+    return json(kayit)
   } catch (err) {
     console.error(err)
     return json({ error: (err as Error).message }, 500)

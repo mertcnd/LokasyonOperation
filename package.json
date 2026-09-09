@@ -2,7 +2,13 @@
   "name": "lokasyon-operasyon-paneli",
   "version": "1.0.0",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test tests/*.test.*",
+    "test:core": "node --test tests/workflow-core.test.cjs tests/workflow-sql.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "playwright": "^1.63.0"
   },
   "engines": {
     "node": ">=18"
