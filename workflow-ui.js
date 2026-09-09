@@ -71,14 +71,15 @@ function wfOnayPanel(a,customer){
   const packages=wfPaketler.filter(p=>p.adim_id===a.id).sort((x,y)=>y.tur-x.tur),pending=packages.find(p=>p.durum==='Bekliyor');
   const docs=kartDokumanlari[a.kart_id]||[];
   const current=docs.filter(d=>!docs.some(x=>x.wf_seri===d.wf_seri&&x.wf_surum>d.wf_surum));
-  const history=packages.map(p=>`<div class="wf-item"><strong>Tur ${p.tur} · ${kacir(p.durum)}</strong><p class="wf-muted">Sunuldu: ${wfZaman(p.sunuldu)}${p.karar_zamani?' · Karar: '+wfZaman(p.karar_zamani):''}</p>${p.dosyalar.map(d=>`<div>${kacir(d.dosya_adi)} <span class="wf-badge">V${d.surum}</span> <button onclick="wfDosyaAc('${jsKacir(p.id)}','${jsKacir(d.id)}')">Dosyayı aç</button></div>`).join('')}${p.aciklama?'<p>'+kacir(p.aciklama)+'</p>':''}${p.karar_veren?'<p class="wf-muted">Karar veren: '+kacir(p.karar_veren)+'</p>':''}</div>`).join('');
+  const history=packages.map(p=>`<div class="wf-item"><strong>Tur ${p.tur} · ${kacir(p.durum)}</strong><p class="wf-muted">Sunuldu: ${wfZaman(p.sunuldu)}${p.karar_zamani?' · Karar: '+wfZaman(p.karar_zamani):''}${p.geri_cekildi?' · Geri çekildi: '+wfZaman(p.geri_cekildi):''}</p>${p.dosyalar.map(d=>`<div>${kacir(d.dosya_adi)} <span class="wf-badge">V${d.surum}</span> ${p.durum==='Geri Çekildi'?'<span class="wf-muted">Dosya kilidi kaldırıldı</span>':`<button onclick="wfDosyaAc('${jsKacir(p.id)}','${jsKacir(d.id)}')">Dosyayı aç</button>`}</div>`).join('')}${p.aciklama?'<p>'+kacir(p.aciklama)+'</p>':''}${p.geri_cekme_nedeni?'<p>Geri çekme nedeni: '+kacir(p.geri_cekme_nedeni)+'</p>':''}${p.karar_veren?'<p class="wf-muted">Karar veren: '+kacir(p.karar_veren)+'</p>':''}${p.geri_ceken?'<p class="wf-muted">Geri çeken: '+kacir(p.geri_ceken)+'</p>':''}</div>`).join('');
   let form='';
   if(!customer&&!pending&&adimBenimMi(a)){
     const rev=wfRevizyonlar.find(r=>r.onay_adim_id===a.id&&!r.yeniden_sunuldu);
     const targets=urunAdimlar.filter(b=>b.kart_id===a.kart_id&&!b.musteri_adimi&&!b.arsivlendi&&b.id!==a.id);
     form=`<details ${packages.length?'':'open'}><summary>${packages.length?'Yeni turu onaya sun':'Dosyaları onaya sun'}</summary><p class="wf-muted">Müşteri yalnızca seçtiğiniz sürümleri onaylar. Sunulan dosyalar korunur.</p><div id="wf-docs-${a.id}">${current.map(d=>`<label><input type="checkbox" value="${kacir(d.id)}"> ${kacir(d.dosya_adi)} · V${d.wf_surum||1}</label>`).join('')||'<p>Önce karta dosya yükleyin.</p>'}</div><label>Düzeltmeyi karşılayacak üretim adımı <select id="wf-target-${a.id}" ${rev?'disabled':''}><option value="">Seçin</option>${targets.map(b=>`<option value="${kacir(b.id)}" ${rev?.uretim_adim_id===b.id?'selected':''}>${kacir(b.ad)} — ${kacir(b.atanan||'Atanmamış')}</option>`).join('')}</select></label><label>Revizyon gelirse hedef tarih <input type="date" id="wf-deadline-${a.id}" min="${today()}" value="${a.tarih&&a.tarih>=today()?a.tarih:today()}"></label><button class="wf-primary" onclick="wfSun('${jsKacir(a.id)}')">Seçilen dosyaları onaya sun</button></details>`;
   }
-  return '<div class="wf-box"><h3>Dosya onayı ve sürüm geçmişi</h3>'+(pending?'<p>Müşteri yanıtı bekleniyor. Karar aşağıdaki turdaki dosyalara uygulanır.</p>':customer?'<p>Şu anda yanıtınızı bekleyen bir dosya paketi yok.</p>':'')+form+'<div class="wf-history">'+(history||'<p class="wf-muted">Sürüme bağlı onay kaydı yok. Önceki adım durumları geriye dönük dosya onayı sayılmaz.</p>')+'</div></div>';
+  const withdraw=pending&&!customer&&adimBenimMi(a)?`<div class="wf-warning"><p>Yanlış dosya gönderildiyse müşteri karar vermeden önce paketi geri çekebilirsiniz.</p><button onclick="wfGeriCek('${jsKacir(a.id)}','${jsKacir(pending.id)}')">Onayı geri çek</button></div>`:'';
+  return '<div class="wf-box"><h3>Dosya onayı ve sürüm geçmişi</h3>'+(pending?'<p>Müşteri yanıtı bekleniyor. Karar aşağıdaki turdaki dosyalara uygulanır.</p>':customer?'<p>Şu anda yanıtınızı bekleyen bir dosya paketi yok.</p>':'')+withdraw+form+'<div class="wf-history">'+(history||'<p class="wf-muted">Sürüme bağlı onay kaydı yok. Önceki adım durumları geriye dönük dosya onayı sayılmaz.</p>')+'</div></div>';
 }
 async function wfBagimlilikKaydet(id){
   const ids=[...document.querySelectorAll('#wf-deps-'+CSS.escape(id)+' input:checked')].map(x=>x.value);
@@ -91,6 +92,16 @@ async function wfSun(id){
   const target=document.getElementById('wf-target-'+id).value,deadline=document.getElementById('wf-deadline-'+id).value;
   if(!target||!deadline){alert('Üretim adımı ve revizyon hedef tarihi seçin.');return;}
   await wfCalistir(()=>wfRPC('sun',{adim_id:id,dosya_ids:selected,duzeltme_adim_id:target,revizyon_hedefi:deadline}));
+}
+async function wfGeriCek(adimId,paketId){
+  const neden=prompt('Onayı neden geri çekiyorsunuz? Örn: Yanlış dosya gönderildi.');
+  if(neden===null)return;
+  if(!neden.trim()){alert('Geri çekme nedeni zorunlu.');return;}
+  if(!confirm('Müşterinin bekleyen onayı geri çekilecek. Paketteki dosyalar daha sonra silinebilir. Devam edilsin mi?'))return;
+  await wfCalistir(async()=>{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/workflow_onay_geri_cek',{method:'POST',headers:SBH(),body:JSON.stringify({p_adim_id:adimId,p_paket_id:paketId,p_neden:neden.trim()})});
+    const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||'Onay geri çekilemedi.');return j;
+  });
 }
 async function wfDosyaAc(pid,id){
   const d=wfPaketler.find(p=>p.id===pid)?.dosyalar.find(d=>d.id===id);if(!d)return;

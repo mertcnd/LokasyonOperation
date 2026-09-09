@@ -6052,7 +6052,7 @@ async function dokumanIndir(id){
   }catch(e){ sbToast(e.message); }
 }
 async function dosyaSil(id,dosyaYolu,dosyaAdi){
-  if(wfHazir&&wfPaketler.some(p=>p.dosyalar.some(d=>d.id===id))){alert('Onaya sunulan dosya korunur. Yeni sürüm yükleyin.');return;}
+  if(wfHazir&&wfPaketler.some(p=>p.durum!=='Geri Çekildi'&&p.dosyalar.some(d=>d.id===id))){alert('Dosya bekleyen veya sonuçlanmış bir onay paketinde kullanılıyor. Bekleyen paketi önce geri çekin.');return;}
   if(!confirm('"'+dosyaAdi+'" silinecek. Emin misiniz?'))return;
   try{
     const encodedYolu=dosyaYolu.split('/').map(s=>encodeURIComponent(s)).join('/');

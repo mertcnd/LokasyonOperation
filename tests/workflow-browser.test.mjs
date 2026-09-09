@@ -1,8 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 test('Panel, günlük grupları ve sürüme bağlı onay ekranlarını çizer', async () => {
+  const port = 31337;
+  const cwd = path.dirname(fileURLToPath(new URL('../server.js', import.meta.url)));
+  const server = spawn(process.execPath, ['server.js'], {
+    cwd,
+    env: { ...process.env, PORT: String(port) },
+    stdio: 'ignore',
+  });
+  await new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5000;
+    const check = () => {
+      const socket = net.createConnection({ host: '127.0.0.1', port });
+      socket.once('connect', () => { socket.destroy(); resolve(); });
+      socket.once('error', () => {
+        socket.destroy();
+        if (Date.now() >= deadline) reject(new Error('Test sunucusu başlatılamadı.'));
+        else setTimeout(check, 50);
+      });
+    };
+    check();
+  });
   const browser = await chromium.launch({
     executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     headless: true,
@@ -52,7 +76,7 @@ test('Panel, günlük grupları ve sürüme bağlı onay ekranlarını çizer', 
     if (table === 'urun_dokumanlari' && !url.searchParams.has('kart_id')) body = [];
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
-    await page.goto('http://127.0.0.1:3000', { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#wf-gunluk .wf-box', { timeout: 10000 });
     assert.match(await page.locator('#wf-gunluk').innerText(), /Bugün benden ne bekleniyor/);
     await page.getByRole('button', { name: /Revizyonlar · 1/ }).click();
@@ -70,6 +94,8 @@ test('Panel, günlük grupları ve sürüme bağlı onay ekranlarını çizer', 
       karar_veren: null, aciklama: null,
     };
     rows.urun_adimlar[1].durum = 'Devam Ediyor';
+    await page.evaluate(async () => { await wfYukle(); renderDetayAdimlar(); });
+    assert.match(await page.locator('#detay-adimlar').innerText(), /Onayı geri çek/);
     await page.evaluate(() => {
       localStorage.setItem('lokasyon_oturum', JSON.stringify({
         id: 'u2', kullanici_adi: 'musteri@example.com', ad_soyad: 'Müşteri',
@@ -90,5 +116,6 @@ test('Panel, günlük grupları ve sürüme bağlı onay ekranlarını çizer', 
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
+    server.kill('SIGTERM');
   }
 });

@@ -16,9 +16,11 @@ create table if not exists public.onay_paketleri (
  kart_id text not null references public.urun_kartlari(id),
  adim_id text not null references public.urun_adimlar(id),
  tur integer not null, dosyalar jsonb not null,
- durum text not null default 'Bekliyor' check(durum in ('Bekliyor','Onaylandı','Revizyon')),
+ durum text not null default 'Bekliyor' constraint onay_paketleri_durum_check
+   check(durum in ('Bekliyor','Onaylandı','Revizyon','Geri Çekildi')),
  sunuldu timestamptz not null default now(), karar_zamani timestamptz,
  karar_veren text, aciklama text,
+ geri_cekildi timestamptz, geri_ceken text, geri_cekme_nedeni text,
  duzeltme_adim_id text not null references public.urun_adimlar(id),
  revizyon_hedefi date not null,
  unique(adim_id,tur)
@@ -106,7 +108,7 @@ create or replace function public.wf_dokuman_koru() returns trigger
 language plpgsql security definer set search_path=public as $$
 begin
  if exists(select 1 from public.onay_paketleri p cross join lateral jsonb_array_elements(p.dosyalar) d
-   where d->>'id'=old.id) then
+   where p.durum<>'Geri Çekildi' and d->>'id'=old.id) then
    raise exception 'Onaya sunulan dosya değiştirilemez veya silinemez. Yeni sürüm yükleyin.';
  end if;
  if TG_OP='DELETE' then return old; end if;
@@ -117,7 +119,7 @@ create trigger wf_dokuman_koru before update or delete on public.urun_dokumanlar
 create or replace function public.wf_dosya_kilitli(yol text) returns boolean
 language sql stable security definer set search_path=public as $$
  select exists(select 1 from public.onay_paketleri p cross join lateral jsonb_array_elements(p.dosyalar) d
- where d->>'dosya_yolu'=yol)
+ where p.durum<>'Geri Çekildi' and d->>'dosya_yolu'=yol)
 $$;
 -- Var olan izinlere ek, daraltıcı kurallar. Onaylı fiziksel dosya da korunur.
 create policy wf_storage_silme on storage.objects as restrictive for delete to authenticated
@@ -282,5 +284,36 @@ grant execute on function public.workflow_v2(text,jsonb) to authenticated;
 revoke all on function public.wf_engeller(text),public.wf_dosya_kilitli(text) from public,anon;
 grant execute on function public.wf_engeller(text),public.wf_dosya_kilitli(text) to authenticated,service_role;
 revoke all on function public.wf_adim_koru(),public.wf_dokuman_koru() from public,anon,authenticated;
+
+-- Müşteri karar vermeden önce yanlış onay paketi geri çekilebilir. Paket kaydı
+-- denetim izi olarak kalır; yalnızca bu paket tarafından kilitlenen dosya silinebilir.
+create or replace function public.workflow_onay_geri_cek(p_adim_id text,p_paket_id text,p_neden text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare
+ a public.urun_adimlar%rowtype; p public.onay_paketleri%rowtype;
+ kart text; rol text; neden text; not_id text;
+begin
+ rol=public.aktif_rol(); neden=trim(coalesce(p_neden,''));
+ if auth.uid() is null or rol not in ('admin','personel') then raise exception 'Bu işlem yalnızca ekip içindir.'; end if;
+ select kart_id into kart from public.urun_adimlar where id=p_adim_id;
+ if kart is null or not coalesce(public.kart_gorunur(kart),false) then raise exception 'Bu karta erişiminiz yok.'; end if;
+ perform 1 from public.urun_kartlari where id=kart for update;
+ select * into a from public.urun_adimlar where id=p_adim_id for update;
+ if coalesce(a.arsivlendi,false) or not a.musteri_adimi then raise exception 'Geçerli bir müşteri onay adımı seçin.'; end if;
+ if rol<>'admin' and coalesce(a.atanan,'')<>'' and a.atanan<>public.aktif_personel_adi() then raise exception 'Bu adım size atanmamış.'; end if;
+ if neden='' then raise exception 'Geri çekme nedeni zorunlu.'; end if;
+ select * into p from public.onay_paketleri
+   where id=p_paket_id and adim_id=a.id and durum='Bekliyor' for update;
+ if not found then raise exception 'Bu onay isteği artık beklemiyor. Sayfayı yenileyin.'; end if;
+ update public.onay_paketleri set durum='Geri Çekildi',geri_cekildi=now(),
+   geri_ceken=public.aktif_ad(),geri_cekme_nedeni=neden where id=p.id returning * into p;
+ update public.urun_adimlar set durum='RET' where id=a.id;
+ not_id=gen_random_uuid()::text;
+ insert into public.urun_adim_notlari(id,adim_id,metin,yazan,tarih)
+   values(not_id,a.id,'Tur '||p.tur||' — Ekip tarafından geri çekildi: '||neden,public.aktif_ad(),current_date);
+ return to_jsonb(p);
+end $$;
+revoke all on function public.workflow_onay_geri_cek(text,text,text) from public,anon;
+grant execute on function public.workflow_onay_geri_cek(text,text,text) to authenticated;
 notify pgrst,'reload schema';
 commit;

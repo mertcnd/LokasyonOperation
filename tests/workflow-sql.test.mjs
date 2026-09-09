@@ -22,10 +22,11 @@ test('Gerçek PostgreSQL: sürüm, onay, revizyon, RLS, bağımlılık ve eski s
  insert into urun_adimlar(id,kart_id,ad,atanan,durum,tarih,sira) values
  ('a','k1','Tasarım','Ada','Tamamlandı','2026-09-09',1),('b','k1','Kontrol','Ada','Bekliyor','2026-09-10',2),('c','k1','Müşteri','Ada','Bekliyor','2026-09-12',3),('x','k2','Gizli','Ada','Bekliyor','2026-09-12',1);
  update urun_adimlar set musteri_adimi=true where id='c';
- insert into storage.objects values('d1','urun-dokumanlari','k1/v1.pdf'),('d2','urun-dokumanlari','k1/v2.pdf');
+ insert into storage.objects values('d1','urun-dokumanlari','k1/v1.pdf'),('d2','urun-dokumanlari','k1/v2.pdf'),('d3','urun-dokumanlari','k1/wrong.pdf');
  grant usage on schema public,auth,storage to authenticated;grant select,update,delete on all tables in schema public to authenticated;
  `);
  await db.exec(fs.readFileSync(new URL('../sql/workflow-v2.sql',import.meta.url),'utf8'));
+ await db.exec(fs.readFileSync(new URL('../sql/workflow-v2-onay-geri-cek.sql',import.meta.url),'utf8'));
  await db.exec(`select set_config('test.uid','11111111-1111-1111-1111-111111111111',false);select set_config('test.role','admin',false);set role authenticated;`);
  const rpc=async(islem,veri={})=>(await db.query('select public.workflow_v2($1,$2::jsonb) as result',[islem,JSON.stringify(veri)])).rows[0].result;
  const role=async value=>db.query("select set_config('test.role',$1,false)",[value]);
@@ -38,17 +39,28 @@ test('Gerçek PostgreSQL: sürüm, onay, revizyon, RLS, bağımlılık ve eski s
  await role('personel');await assert.rejects(rpc('bagimlilik',{adim_id:'b',bagimliliklar:[]}),/yönetici/);await role('admin');
  const doc=await rpc('dokuman',{kart_id:'k1',dosya_adi:'etiket.pdf',dosya_yolu:'k1/v1.pdf',dosya_turu:'pdf',boyut_kb:5});
  assert.equal(doc.wf_surum,1);
+ const wrong=await rpc('dokuman',{kart_id:'k1',dosya_adi:'yanlis.pdf',dosya_yolu:'k1/wrong.pdf',dosya_turu:'pdf',boyut_kb:4});
  await rpc('bagimlilik',{adim_id:'c',bagimliliklar:['b']});
  const sun={adim_id:'c',dosya_ids:[doc.id],duzeltme_adim_id:'a',revizyon_hedefi:'2099-09-30'};
  await assert.rejects(rpc('sun',sun),/Ön koşullar/);
  await rpc('durum',{adim_id:'b',durum:'Tamamlandı',onceki_durum:'Bekliyor'});
  await assert.rejects(rpc('durum',{adim_id:'b',durum:'RET',onceki_durum:'Bekliyor'}),/başka bir oturum/);
- const paket=await rpc('sun',sun);assert.equal(paket.dosyalar[0].surum,1);
+ const yanlisPaket=await rpc('sun',{...sun,dosya_ids:[wrong.id]});
+ await assert.rejects(db.query('delete from urun_dokumanlari where id=$1',[wrong.id]),/onay paketinde|Onaya sunulan/);
+ await assert.rejects(db.query("select public.workflow_onay_geri_cek($1,$2,$3)",['c',yanlisPaket.id,'']),/nedeni zorunlu/);
+ const geri=(await db.query("select public.workflow_onay_geri_cek($1,$2,$3) as result",['c',yanlisPaket.id,'Yanlış dosya gönderildi'])).rows[0].result;
+ assert.equal(geri.durum,'Geri Çekildi');
+ assert.equal((await db.query("select durum from urun_adimlar where id='c'")).rows[0].durum,'RET');
+ assert.equal((await db.query("select public.wf_dosya_kilitli('k1/wrong.pdf') as kilitli")).rows[0].kilitli,false);
+ await db.query('delete from urun_dokumanlari where id=$1',[wrong.id]);
+ assert.equal((await db.query('select count(*)::int as n from urun_dokumanlari where id=$1',[wrong.id])).rows[0].n,0);
+ const paket=await rpc('sun',sun);assert.equal(paket.dosyalar[0].surum,1);assert.equal(paket.tur,2);
  await assert.rejects(rpc('sun',sun),/Zaten/);
  await assert.rejects(db.query("update urun_adimlar set durum='Tamamlandı' where id='c'"),/Müşteri adımını/);
  await assert.rejects(db.query("update urun_adimlar set wf_bagimliliklar='[]' where id='b'"),/Akış alanları/);
- await assert.rejects(db.query('delete from urun_dokumanlari where id=$1',[doc.id]),/Onaya sunulan/);
+ await assert.rejects(db.query('delete from urun_dokumanlari where id=$1',[doc.id]),/onay paketinde|Onaya sunulan/);
  await role('musteri');
+ await assert.rejects(db.query("select public.workflow_onay_geri_cek($1,$2,$3)",['c',paket.id,'Müşteri denemesi']),/yalnızca ekip/);
  await assert.rejects(rpc('karar',{adim_id:'c',paket_id:paket.id,karar:'revizyon',not:''}),/açıklaması/);
  const karar=await rpc('karar',{adim_id:'c',paket_id:paket.id,karar:'revizyon',not:'Barkod büyüsün'});assert.equal(karar.durum,'RET');
  assert.equal((await db.query('select * from revizyon_turlari')).rows.length,0,'müşteri iç revizyon bilgisi görmez');
@@ -64,11 +76,11 @@ test('Gerçek PostgreSQL: sürüm, onay, revizyon, RLS, bağımlılık ve eski s
  await assert.rejects(rpc('sun',sun),/daha yeni sürümü/);
  const v2=await rpc('dokuman',{kart_id:'k1',onceki_id:doc.id,dosya_adi:'etiket-son.pdf',dosya_yolu:'k1/v2.pdf',dosya_turu:'pdf',boyut_kb:8});assert.equal(v2.wf_surum,2);assert.equal(v2.wf_seri,doc.wf_seri);
  await assert.rejects(rpc('sun',sun),/son sürümü/);
- const ikinci=await rpc('sun',{...sun,dosya_ids:[v2.id]});assert.equal(ikinci.tur,2);
+ const ikinci=await rpc('sun',{...sun,dosya_ids:[v2.id]});assert.equal(ikinci.tur,3);
  const rev=(await db.query('select * from revizyon_turlari')).rows[0];assert.equal(Number(rev.harcanan_dk),25);assert.ok(rev.yeniden_sunuldu);
  await role('musteri');
  await rpc('karar',{adim_id:'c',paket_id:ikinci.id,karar:'onay'});
- const ps=(await db.query('select * from onay_paketleri order by tur')).rows;assert.equal(ps[0].durum,'Revizyon');assert.equal(ps[1].durum,'Onaylandı');assert.equal(ps[0].dosyalar[0].surum,1);
+ const ps=(await db.query('select * from onay_paketleri order by tur')).rows;assert.equal(ps[0].durum,'Geri Çekildi');assert.equal(ps[1].durum,'Revizyon');assert.equal(ps[2].durum,'Onaylandı');assert.equal(ps[1].dosyalar[0].surum,1);
  await assert.rejects(rpc('durum',{adim_id:'a',durum:'RET',onceki_durum:'Tamamlandı'}),/yalnızca ekip/);
  await db.exec('reset role;set role anon;');await assert.rejects(rpc('surum'),/permission denied/);
  }finally{await db.close();}
