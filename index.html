@@ -211,6 +211,78 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
 .urun-karti:hover{box-shadow:0 4px 20px var(--kart-golge,rgba(0,0,0,.18))}
 /* Logo — kaynak temadan gelir (--logo), tema değişince anında değişir */
 .logo{background:var(--logo) center/contain no-repeat;aspect-ratio:614/390;flex-shrink:0}
+/* ── RESPONSIVE ──────────────────────────────────────────────────────────────
+  Panel masaüstü için kurulmuştu; 2026-09-10 taramasında telefonda (375 px) her
+  sekmede yatay kayma vardı: başlık satırı sığmıyor, iki-üç sütunlu düzenler
+  daralmıyordu. Arayüz satır içi ızgaralarla kurulu olduğu için (40+ yerde
+  grid-template-columns) bunları tek tek sınıfa çevirmek yerine genişlik
+  eşiklerinde tek noktadan ele alınıyor.
+  Hariç tutulanlar bilerek: kendiliğinden sığan ızgaralar (auto-fit/auto-fill),
+  ikon satırları (34px ile başlayanlar) ve kendi sınıfı olan adım kartı satırı.
+  Kural yalnızca ana içerik ve açılır pencerelerde geçerli; ekran dışında
+  çizilen teklif PDF şablonu etkilenmez.
+──────────────────────────────────────────────────────────────────────────── */
+/* Boşluksuz uzun klasör/kart adları başlık bloğunu genişletmesin */
+#detay-kart-adi,#detay-klasor-adi{overflow-wrap:anywhere}
+/* Veri Yönetimi: üç kart sabit 1fr 1fr 1fr idi. Izgara öğeleri içeriklerinden
+   küçülemediği için kart içindeki tablolar (550 px'e varan) sütunları büyütüp
+   1024-1440 px ekranlarda da sayfayı yatay kaydırıyordu. Kartlar sığdığı kadar
+   yan yana dizilir, geniş tablo kartın içinde kayar. */
+.veri-izgara{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px}
+.veri-izgara>.card{min-width:0;overflow-x:auto}
+/* Belge not ekranı: sahne flex ile ortalanıyordu. Belge sahneden genişken
+   (telefonda ya da yakınlaştırınca) taşma iki yana dağılıyor, sol kenar
+   negatif konuma düşüp kaydırılarak bile görülemiyordu. Ortalama kenar
+   boşluğuyla yapılınca taşan kısım sağda kalır ve kaydırılabilir. */
+#dnot-sahne{justify-content:flex-start!important}
+#dnot-wrap{margin:0 auto}
+/* Büyütülmüş karşılaştırma görüntüsü parmakla kaydırılırken sayfa kaymasın */
+#kb-sahne{touch-action:none}
+@media (max-width:980px){
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sum-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  :is(.main,[id$="-modal"]) :is([style*="grid-template-columns:"],[style*="grid-template-columns: "]):not([style*="auto-fit"]):not([style*="auto-fill"]):not([style*="columns:34px"]):not([style*="columns: 34px"]):not(.adim-satir){grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  /* Geniş tablolar sayfayı değil kendi kartını kaydırsın */
+  .card{overflow-x:auto}
+}
+@media (max-width:700px){
+  .header{padding:10px 12px 0}
+  .header-ust{flex-wrap:wrap;gap:8px;margin-bottom:8px!important}
+  .header-sol{gap:10px!important}
+  .header .logo{height:38px!important}
+  .header h1{font-size:16px}
+  .header-sag{flex-wrap:wrap;gap:6px!important;margin-left:auto;justify-content:flex-end}
+  /* 10 sekme telefonda 4-5 satır yer kaplıyordu: yatay kayan tek şerit */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0;padding:7px 13px;margin-bottom:6px}
+  .main{padding:14px 12px}
+  .card{padding:14px}
+  #bildirim-paneli{position:fixed!important;top:60px!important;left:8px!important;right:8px!important;width:auto!important;max-height:70vh!important}
+  [id$="-modal"]:not(#dokuman-not-modal){padding:8px!important}
+  /* Belge not ekranı: 330 px not sütunu belgenin altına iner */
+  #dokuman-not-modal>div:nth-child(2){flex-direction:column}
+  #dokuman-not-modal>div:nth-child(2)>div:nth-child(2){width:100%!important;max-height:42vh;border-left:none!important;border-top:1px solid var(--cizgi)}
+  #dnot-sahne{padding:8px!important}
+  /* Tablo içi kutular telefonda 2-3 harfe sıkışıyordu (Veri Yönetimi e-posta,
+     seviye): asgari genişlikle tablo sıkışmak yerine kartın içinde kayar. */
+  .tbl input,.tbl select{min-width:110px}
+  /* Adım kartı satırı: 1. satır daire · ad · ok, 2. satır süre · durum · sıra.
+     Izgarada ad sütunu 0 px'e düşüyor, adım adı hiç görünmüyordu. */
+  .adim-satir{display:flex!important;flex-wrap:wrap;align-items:center;column-gap:10px;row-gap:8px;padding:11px 12px!important}
+  .adim-satir>:nth-child(1){order:1;flex-shrink:0}
+  .adim-satir>:nth-child(2){order:2;flex:1 1 calc(100% - 82px);min-width:0}
+  .adim-satir>:nth-child(6){order:3}
+  .adim-satir>:nth-child(3){order:4;margin-left:40px;text-align:left!important}
+  .adim-satir>:nth-child(4){order:5;flex:1 1 120px;min-width:0}
+  .adim-satir>:nth-child(5){order:6}
+}
+@media (max-width:560px){
+  .g2,.g3,.g4,.kpi-grid{grid-template-columns:1fr}
+  .sum-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  :is(.main,[id$="-modal"]) :is([style*="grid-template-columns:"],[style*="grid-template-columns: "]):not([style*="auto-fit"]):not([style*="auto-fill"]):not([style*="columns:34px"]):not([style*="columns: 34px"]):not(.adim-satir){grid-template-columns:1fr!important}
+}
 /* Tema düğmesi */
 .tema-btn{background:var(--yuzey);border:1.5px solid var(--cizgi2);color:var(--yazi2);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .tema-btn:hover{border-color:var(--vurgu);color:var(--vurgu)}
@@ -887,10 +959,10 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
 
 <!-- HEADER -->
 <div class="header">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:18px">
+  <div class="header-ust" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div class="header-sol" style="display:flex;align-items:center;gap:18px">
     <div class="logo" role="img" aria-label="Lokasyon İstanbul" style="height:52px"></div>
     <h1 style="margin-bottom:0">Operasyon Paneli</h1>
-  </div><div style="display:flex;align-items:center;gap:12px"><div style="font-size:12px;color:#888;text-align:right"><div id="header-kullanici-adi" style="font-size:13px;font-weight:700;color:#1a237e"></div><div id="header-kullanici-rol" style="font-size:11px;color:#aaa"></div></div><div id="zil-sarmal" style="position:relative;display:none">
+  </div><div class="header-sag" style="display:flex;align-items:center;gap:12px"><div style="font-size:12px;color:#888;text-align:right"><div id="header-kullanici-adi" style="font-size:13px;font-weight:700;color:#1a237e"></div><div id="header-kullanici-rol" style="font-size:11px;color:#aaa"></div></div><div id="zil-sarmal" style="position:relative;display:none">
       <button id="zil-btn" onclick="bildirimPaneliAcKapa(event)" class="tema-btn" title="Bildirimler" style="padding:6px 12px">🔔<span id="zil-rozet" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--kirmizi-dolgu);color:#fff;border-radius:10px;min-width:17px;height:17px;font-size:10px;font-weight:800;line-height:17px;text-align:center;padding:0 4px"></span></button>
       <div id="bildirim-paneli" style="display:none;position:absolute;top:40px;right:0;width:380px;max-height:460px;background:var(--yuzey);border:1px solid var(--cizgi);border-radius:12px;box-shadow:0 10px 40px var(--golge2);z-index:9995;overflow:hidden;flex-direction:column">
         <div style="padding:12px 14px;border-bottom:1px solid var(--cizgi);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
@@ -1329,7 +1401,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
      TAB 7: VERİ YÖNETİMİ
 ══════════════════════════════════════════════════ -->
 <div id="tab-veri" class="tab-panel">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+  <div class="veri-izgara">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div style="font-size:15px;font-weight:700;color:#1565c0">Personel Yönetimi</div></div>
       <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr;gap:10px;margin-bottom:10px">
@@ -2158,6 +2230,19 @@ function temaDugmesiniGuncelle(){
   b.textContent=gece?'☀️ Gündüz':'🌙 Gece';
   b.title=gece?'Gündüz görünümüne geç':'Gece görünümüne geç';
 }
+
+/* Telefonda sekme şeridi yatay kayıyor: seçili sekme görünür alanın ortasına
+   gelsin. Sayfayı dikey kaydırmamak için scrollIntoView yerine scrollLeft. */
+(function(){
+  const bar=document.getElementById('tab-bar');
+  if(!bar||!window.MutationObserver)return;
+  const ortala=()=>{
+    const t=bar.querySelector('.tab.active');
+    if(!t||bar.scrollWidth<=bar.clientWidth)return;
+    bar.scrollLeft+=(t.getBoundingClientRect().left-bar.getBoundingClientRect().left)-(bar.clientWidth-t.offsetWidth)/2;
+  };
+  new MutationObserver(ortala).observe(bar,{subtree:true,attributes:true,attributeFilter:['class']});
+})();
 
 /* ── PANEL İÇİ BİLDİRİMLER ───────────────────────────────────────────────────
   Müşteri bir adımı reddettiğinde (RET), işi yapan kişiye buradan bildirim
@@ -3031,7 +3116,10 @@ function ortakOlaylariBagla(){
   // Karşılaştırma büyütme ekranı: sürükleme, tekerlek ve kısayollar
   const kbs=document.getElementById('kb-sahne');
   if(kbs){
-    kbs.addEventListener('mousedown',kbKaydirBasla);
+    // Pointer olayları fare, dokunma ve kalemi birlikte karşılar. Fare olaylarıyla
+    // yazılıydı; dokunmatik ekranda sürükleme sırasında fare olayı üretilmediği için
+    // telefonda büyütülmüş karşılaştırma görüntüsü kaydırılamıyordu.
+    kbs.addEventListener('pointerdown',kbKaydirBasla);
     kbs.addEventListener('wheel',e=>{
       if(!kbAcikMi())return;
       e.preventDefault();
@@ -3039,8 +3127,9 @@ function ortakOlaylariBagla(){
       kbZoomMerkezli(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);
     },{passive:false});
   }
-  document.addEventListener('mousemove',kbKaydir);
-  document.addEventListener('mouseup',kbKaydirBitir);
+  document.addEventListener('pointermove',kbKaydir);
+  document.addEventListener('pointerup',kbKaydirBitir);
+  document.addEventListener('pointercancel',kbKaydirBitir);
   window.addEventListener('resize',()=>{ if(kbAcikMi())kbSigdir(); });
   document.addEventListener('keydown',e=>{
     if(!kbAcikMi())return;
@@ -3055,9 +3144,17 @@ function ortakOlaylariBagla(){
   });
   // Doküman not ekranı: çizim ve klavye kısayolları
   const dov=document.getElementById('dnot-overlay');
-  if(dov)dov.addEventListener('mousedown',dnotMouseDown);
-  document.addEventListener('mousemove',dnotMouseMove);
-  document.addEventListener('mouseup',dnotMouseUp);
+  // Belge üzerine kutu/ok/vurgu çizimi de pointer olaylarıyla: fare olaylarıyla
+  // telefonda yalnızca iğne (tek dokunuş) çalışıyor, sürükleyerek çizim yapılamıyordu.
+  if(dov)dov.addEventListener('pointerdown',dnotMouseDown);
+  document.addEventListener('pointermove',dnotMouseMove);
+  document.addEventListener('pointerup',dnotMouseUp);
+  // Dokunuş sistem tarafından iptal edilirse (ör. kaydırmaya dönüşürse) yarım çizim kalmasın
+  document.addEventListener('pointercancel',()=>{
+    if(!dnot.ciziliyor)return;
+    dnot.ciziliyor=null;
+    const on=document.getElementById('dnot-onizleme');if(on)on.innerHTML='';
+  });
   document.addEventListener('keydown',e=>{
     if(document.getElementById('dokuman-not-modal').style.display!=='flex')return;
     const yaziyor=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||'');
@@ -5523,7 +5620,7 @@ function renderDetayAdimlar(){
     const isExpanded=expandedAdimId===a.id;
     const notlar=urunAdimNotlari[a.id]||[];
     return `<div id="adim-krt-${a.id}" style="border:1.5px solid ${ret?'#e53935':(isExpanded?'#1565c0':'#e2e8f0')};border-radius:10px;margin-bottom:10px;background:${ret?'#fff5f5':'#fff'};overflow:hidden;transition:border-color .15s">
-      <div style="display:grid;grid-template-columns:34px 1fr auto 130px 26px 22px;gap:10px;align-items:center;padding:13px 16px;cursor:pointer" onclick="adimExpand('${a.id}')">
+      <div class="adim-satir" style="display:grid;grid-template-columns:34px 1fr auto 130px 26px 22px;gap:10px;align-items:center;padding:13px 16px;cursor:pointer" onclick="adimExpand('${a.id}')">
         <div style="width:30px;height:30px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:${ret?'11px':'12px'};font-weight:800;flex-shrink:0">${a.durum==='Tamamlandı'?'✓':(ret?'RET':a.sira)}</div>
         <div style="overflow:hidden;min-width:0">
           <div style="font-size:13px;font-weight:700;color:${ret?'#c62828':(a.durum==='Tamamlandı'?'#aaa':'#222')};${a.durum==='Tamamlandı'?'text-decoration:line-through':''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ret?'<span class="badge badge-ret" style="margin-right:6px;font-size:10px">RET</span>':''}${kacir(a.ad)}${a.arsivlendi?' <span style="font-size:9px;font-weight:700;color:#ff8f00;background:#fff3e0;padding:2px 6px;border-radius:8px;margin-left:4px">📦 ARŞİVDE</span>':''}</div>
@@ -6363,6 +6460,7 @@ function dnotAraclariCiz(){
   if(ov){
     ov.style.pointerEvents=dnot.arac==='sec'?'none':'auto';
     ov.style.cursor=dnot.arac==='sec'?'default':'crosshair';
+    ov.style.touchAction=dnot.arac==='sec'?'auto':'none';   // çizerken sayfa kaymasın
   }
 }
 function dnotAracSec(k){dnot.arac=k;dnotAraclariCiz();dnotOverlayCiz()}
@@ -6469,6 +6567,7 @@ function dnotOverlayCiz(){
   ov.innerHTML=svg+parcalar.join('')+'<div id="dnot-onizleme"></div>';
   ov.style.pointerEvents=dnot.arac==='sec'?'none':'auto';
   ov.style.cursor=dnot.arac==='sec'?'default':'crosshair';
+    ov.style.touchAction=dnot.arac==='sec'?'auto':'none';   // çizerken sayfa kaymasın
   // İmleç modunda rozetler yine tıklanabilir olmalı
   if(dnot.arac==='sec')ov.querySelectorAll('div[onclick]').forEach(el=>el.style.pointerEvents='auto');
 }
