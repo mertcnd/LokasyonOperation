@@ -96,6 +96,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--vurgu);box-shadow:0 0
 .kpi-card.blue-card{background:var(--mavi-zemin);border-color:var(--cizgi2)}
 .kpi-card.green-card{background:var(--yesil-zemin);border-color:var(--yesil-kenar)}
 .kpi-card.white-card{background:var(--yuzey)}
+/* KPI üst satırı: halka ve (yalnız maliyet yetkilisine) para özeti yan yana */
+.kpi-ust{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap}
+.kpi-ust .circle-wrap{margin:0 0 8px}
+.kpi-para{display:flex;flex-direction:column;align-items:flex-start;min-width:120px;margin-bottom:8px}
+.kpi-para[hidden]{display:none}
+.kpi-para .kp-deger{font-size:20px;font-weight:800;line-height:1.1;white-space:nowrap}
+.kpi-para .kp-etiket{font-size:10px;font-weight:700;color:var(--yazi3);text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
+.kpi-para .kp-not{font-size:10px;color:var(--yazi4);margin-top:2px}
 .kpi-label{font-size:12px;font-weight:700;letter-spacing:.5px;margin-bottom:14px}
 .kpi-stats{display:flex;width:100%;border-top:1px solid var(--cizgi);padding-top:12px}
 .kpi-stat{flex:1;text-align:center;border-right:1px solid var(--cizgi);padding:0 6px}
@@ -1128,12 +1136,19 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
   <!-- KPI -->
   <div class="kpi-grid">
     <div class="kpi-card blue-card">
+      <div class="kpi-ust">
       <div class="circle-wrap">
         <svg width="84" height="84" viewBox="0 0 84 84">
           <circle cx="42" cy="42" r="32" fill="none" stroke="#e8ecf0" stroke-width="7"/>
           <circle id="cg-gorev" cx="42" cy="42" r="32" fill="none" stroke="#5c6bc0" stroke-width="7" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" style="transition:stroke-dashoffset .4s"/>
         </svg>
         <div class="circle-text"><div class="cv" id="kpi-total">0</div><div class="cl">görev</div></div>
+      </div>
+      <div class="kpi-para" id="kpi-gelir-kutu" hidden title="Filtredeki görevlerin fiyat listesine göre ham toplamı; vergi dahil değil. Maliyet sekmesiyle aynı hesap.">
+        <div class="kp-deger sv-green" id="kpi-gelir">0 TL</div>
+        <div class="kp-etiket">Görev Geliri</div>
+        <div class="kp-not" id="kpi-gelir-not">vergisiz ham fiyat</div>
+      </div>
       </div>
       <div class="kpi-label sv-blue">GÖREVLER</div>
       <div class="kpi-stats">
@@ -1143,12 +1158,19 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       </div>
     </div>
     <div class="kpi-card green-card">
+      <div class="kpi-ust">
       <div class="circle-wrap">
         <svg width="84" height="84" viewBox="0 0 84 84">
           <circle cx="42" cy="42" r="32" fill="none" stroke="#e8ecf0" stroke-width="7"/>
           <circle id="cg-kap" cx="42" cy="42" r="32" fill="none" stroke="#66bb6a" stroke-width="7" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" style="transition:stroke-dashoffset .4s"/>
         </svg>
         <div class="circle-text"><div class="cv" id="kpi-kap-val">0</div><div class="cl">sa dolu</div></div>
+      </div>
+      <div class="kpi-para" id="kpi-maliyet-kutu" hidden title="Dolu saatin, personel seviyesine göre saatlik ücretle çarpımı. Maliyet sekmesindeki ücretler kullanılır.">
+        <div class="kp-deger sv-orange" id="kpi-maliyet">0 TL</div>
+        <div class="kp-etiket">Personel Maliyeti</div>
+        <div class="kp-not" id="kpi-maliyet-not">seviye saatlik ücretiyle</div>
+      </div>
       </div>
       <div class="kpi-label sv-green">KAPASİTE</div>
       <div class="kpi-stats">
@@ -3512,6 +3534,23 @@ function renderRaporlama(){
   set('kpi-per-filtre',perCount+' kişi');
   set('kpi-per-gun',gunSayisi+' gün');
   set('kpi-per-basi',(perCount>0?fmtSaat(toplamDk/perCount):'0.0')+' sa');
+  // ── Görev geliri ve personel maliyeti ──
+  // Maliyet sekmesiyle birebir aynı hesap (mHesapla): gelir marka özel ya da
+  // genel fiyat listesinden, vergisiz; maliyet = süre/60 × seviye saatlik ücreti.
+  // Maliyet aynı 'süre' alanından hesaplandığı için yanındaki dolu saatle tutarlı.
+  // Yalnız maliyet yetkisi olana gösterilir: Raporlama sekmesi açık her personel
+  // fiyat listesini ve personel maliyetini görmemeli.
+  const paraGoster=maliyetGorebilir();
+  ['kpi-gelir-kutu','kpi-maliyet-kutu'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!paraGoster;});
+  if(paraGoster){
+    const tl=v=>Math.round(v||0).toLocaleString('tr-TR')+' TL';
+    let gelir=0,maliyet=0,fiyatsiz=0;
+    list.forEach(g=>{const h=mHesapla(g);gelir+=h.gelir;maliyet+=h.maliyet;if(!h.gelir)fiyatsiz++;});
+    set('kpi-gelir',tl(gelir));
+    set('kpi-maliyet',tl(maliyet));
+    // Fiyatı tanımsız görev geliri 0 sayar; toplam eksik görünmesin diye söylenir.
+    set('kpi-gelir-not',fiyatsiz?fiyatsiz+' görevde fiyat tanımlı değil':'vergisiz ham fiyat');
+  }
   const C=201;
   const cg1=document.getElementById('cg-gorev');if(cg1)cg1.setAttribute('stroke-dashoffset',C-C*(total>0?tam/total:0));
   const cg2=document.getElementById('cg-kap');if(cg2)cg2.setAttribute('stroke-dashoffset',C-C*Math.min(toplamDk/Math.max(kapDk,1),1));
