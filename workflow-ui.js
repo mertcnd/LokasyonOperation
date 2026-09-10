@@ -44,7 +44,7 @@ function wfGorevler(list){
   const long=pending.filter(p=>Date.now()-Date.parse(p.sunuldu)>3*86400000);
   const overloaded=personeller.filter(p=>{
     const load=active.filter(a=>a.atanan===p.ad&&a.tarih===today()&&!a.musteri_adimi).reduce((s,a)=>s+Number(a.sure||0),0);
-    const leave=izinler.filter(i=>i.personel===p.ad&&i.tarih===today()).reduce((s,i)=>s+izinDkCevir(i.sure),0);
+    const leave=izinler.filter(i=>i.personel===p.ad&&i.tarih===today()).reduce((s,i)=>s+izinDkCevir(i.sure,today()),0);
     return load>Math.max(0,gunlukMesaiDk(today())-leave);
   });
   el.innerHTML='<div class="wf-box"><h3>Bugün benden ne bekleniyor?</h3><p class="wf-muted">Aşağıdaki tarih, marka ve kişi filtreleri uygulanır. Risk listesi diğer gruplarla kesişebilir.</p><div class="wf-actions">'+Object.entries(labels).filter(([k])=>k!=='sahipsiz'||adminMi()).map(([k,l])=>`<button aria-pressed="${wfFiltre===k}" onclick="wfFiltre='${k}';renderGorevler()">${l} · ${k==='tumu'?list.length:groups[k].length}</button>`).join('')+'</div>'+

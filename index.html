@@ -975,7 +975,7 @@ textarea.editor-content{width:100%;border:none;padding:10px;font-size:13px;resiz
       <div style="margin-bottom:14px"><div class="lbl">Personel</div><select id="izin-per"><option value="">Personel Seçin...</option></select></div>
       <div style="margin-bottom:18px"><div class="lbl">İzin Süresi (Gün Başına)</div>
         <select id="izin-sure">
-          <option>2 Saat</option><option>4 Saat (Yarım Gün)</option><option selected>8 Saat (Tam Gün)</option>
+          <option>2 Saat</option><option>3 Saat (Yarım Gün)</option><option selected>6 Saat (Tam Gün)</option>
         </select>
       </div>
       <button class="btn btn-full" onclick="izinKaydet()">Kaydet</button>
@@ -1679,7 +1679,10 @@ function aySonu(){const d=new Date(),s=new Date(d.getFullYear(),d.getMonth()+1,0
 // hesaplanır; tablo tutulmadığı için her yıl kendiliğinden doğru çalışır.
 // 2026 ve 2027 için üretilen tarihler Diyanet'in yayımladığı tarihlerle
 // birebir doğrulandı. Arifeler (13:00 sonrası) yarım gün sayılır.
-const GUNLUK_MESAI_DK=8*60;
+// Personel günlük çalışma süresi. 2026-09-10'da 8 saatten 6 saate indirildi.
+// Kapasite raporu, yük haritası, tarih önerisi, iş akışı kapasite uyarısı,
+// simülasyon ve izin çevirisi bu tek sabitten beslenir; başka yere 8/6 yazmayın.
+const GUNLUK_MESAI_DK=6*60;
 const TATIL_SABIT=[
   [1,1,'Yılbaşı'],
   [4,23,'Ulusal Egemenlik ve Çocuk Bayramı'],
@@ -3318,7 +3321,7 @@ function simSilPaket(id){simPaketler=simPaketler.filter(p=>p.id!==id);simRenderP
 function simHesapla(){
   let toplamDk=0;
   simPaketler.forEach(p=>{const it=isTurleri.find(i=>i.ad===p.isTuru);if(!it)return;toplamDk+=(p.basit||0)*it.basit+(p.normal||0)*it.normal+(p.kompleks||0)*it.kompleks});
-  const gun=parseInt(document.getElementById('sim-hedef').value)||1,gerPersonel=Math.ceil(toplamDk/(gun*8*60));
+  const gun=parseInt(document.getElementById('sim-hedef').value)||1,gerPersonel=Math.ceil(toplamDk/(gun*GUNLUK_MESAI_DK));
   document.getElementById('sim-sonuc-empty').style.display='none';
   document.getElementById('sim-sonuc').style.display='block';
   document.getElementById('sim-sonuc-rows').innerHTML=[
@@ -4121,7 +4124,7 @@ function personelBosKapasite(personelAdi,gun){
   if(!mesai)return 0;                       // hafta sonu / tam gün tatil
   const izin=izinler
     .filter(i=>i.personel===personelAdi&&i.tarih===gun)
-    .reduce((t,i)=>t+(parseInt(i.sure)||0),0);
+    .reduce((t,i)=>t+izinDkCevir(i.sure,gun),0);   // parseInt "8 Saat (Tam Gün)"ü 8 dk sayıyordu
   const adimYuku=urunAdimlar
     .filter(a=>!a.arsivlendi&&a.atanan===personelAdi&&a.tarih===gun&&a.durum!=='Tamamlandı')
     .reduce((t,a)=>t+(parseInt(a.sure)||0),0);
@@ -4337,7 +4340,22 @@ function dateRangeArr(s,e){
   for(let d=new Date(sd);d<=ed;d.setDate(d.getDate()+1))dates.push(dateToStr(d));
   return dates;
 }
-function izinDkCevir(sure){const n=parseInt(sure)||8;return n*60;}
+/*
+  İzin kaydı süreyi metin olarak tutar ("6 Saat (Tam Gün)", "3 Saat (Yarım Gün)",
+  "2 Saat"). Tam ve yarım gün ETİKETTEN okunur, saat sayısından değil: mesai 8
+  saatken girilmiş "8 Saat (Tam Gün)" kayıtları 6 saatlik günde de tam gün
+  sayılmalı, yarım gün de o günün mesaisinin yarısı olmalı (arifede daha az).
+  Sonuç o günün mesaisini aşamaz; tatile denk gelen izin kapasiteyi eksiye çekmez.
+*/
+function izinDkCevir(sure,gun){
+  const mesai=gun?gunlukMesaiDk(gun):GUNLUK_MESAI_DK;
+  const metin=String(sure||'');
+  let dk;
+  if(/tam\s*gün/i.test(metin))dk=mesai;
+  else if(/yarım\s*gün/i.test(metin))dk=Math.round(mesai/2);
+  else dk=(parseInt(metin)||0)*60||mesai;   // tanınmayan kayıt tam gün sayılır
+  return Math.min(dk,mesai);
+}
 // Kapasite: hafta sonları ve resmî tatiller mesai dışıdır, arifeler yarım gündür.
 // İzin, o günün mesaisinden fazla düşemez (tatile denk gelen izin kapasiteyi
 // eksiye çekmesin).
@@ -4347,7 +4365,7 @@ function kapasiteHesapla(perList,fs,fe){
   const baseKap=perList.length*gunlukToplam;
   const izinDk=izinler
     .filter(i=>perList.includes(i.personel)&&(!fs||i.tarih>=fs)&&(!fe||i.tarih<=fe))
-    .reduce((s,i)=>s+Math.min(izinDkCevir(i.sure),gunlukMesaiDk(i.tarih)),0);
+    .reduce((s,i)=>s+izinDkCevir(i.sure,i.tarih),0);
   return Math.max(0,baseKap-izinDk);
 }
 function kapHesaplaRapor(fs,fe){
