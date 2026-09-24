@@ -331,6 +331,24 @@ def page_product_cards(c, p, total):
     callout(c, "Kart adı ve marka", "Kartın adı, müşterinin de göreceği bağlamdır. Kısa, ayırt edici ve dosya adıyla tutarlı yazın.", 536, 102, 271, 83, "info")
 
 
+def page_archive(c, p, total):
+    page_base(c, "Arşiv", "Arşivleme ve geri alma", "Geri almayı ekipteki herkes yapabilir", p, total)
+    numbered_step(c, 1, "Adımı arşive gönder", "Adım satırındaki 📦 düğmesi. Arşivlenen adım rapora, kapasiteye ve günlük listeye girmez.", 34, 492, 360, accent=ORANGE)
+    numbered_step(c, 2, "Arşiv sekmesinden geri çek", "Tarih, marka, kişi ve iş türü filtreleriyle bul; satırdaki ↩ Geri Çek düğmesine bas.", 34, 418, 360, accent=BLUE)
+    numbered_step(c, 3, "Kart içinden geri al", "Kartta “Arşivlenen adımlar” şeridini aç; adımdaki ↩ Geri Al düğmesini kullan.", 34, 344, 360, accent=GREEN)
+    numbered_step(c, 4, "Kartı yeniden aç", "Tamamlanmış veya arşivlenmiş kartta Yeniden Aktif Et; panel arşivdeki adımları da geri almayı teklif eder.", 34, 270, 360, accent=PURPLE)
+    callout(c, "Geri almada sahiplik kilidi yok", "Arşivleme adımın sahibine kilitlidir; <b>geri alma kilitli değildir</b>. Başkasına atanmış bir adımı da arşivden çıkarabilirsiniz.", 34, 103, 360, 86, "ok")
+
+    rounded_box(c, 418, 105, 389, 387, fill=PANEL, stroke=LINE, radius=14)
+    c.setFillColor(NAVY)
+    c.setFont("GuideSans-Bold", 13)
+    c.drawString(440, 462, "Arşivden geri alınca ne değişir?")
+    mini_card(c, "Listelere döner", "Adım yeniden Günlük Durum, Ürün Kartı ve Raporlama kapsamına girer.", 440, 372, 345, 72, accent=BLUE, tag="1")
+    mini_card(c, "Durumu korunur", "Arşive girmeden önceki durumu (Bekliyor / Devam Ediyor / Tamamlandı / RET) neyse o kalır.", 440, 288, 345, 72, accent=GREEN, tag="2")
+    mini_card(c, "Sorumlusu değişmez", "Adım kime atanmışsa ona atanmış kalır; geri alan kişiye geçmez.", 440, 204, 345, 72, accent=PURPLE, tag="3")
+    callout(c, "Sınır", "Göremediğiniz markaya ait adımlar bu kuralın dışındadır; marka yetkisi her durumda geçerlidir.", 440, 120, 345, 72, "warn")
+
+
 def page_revision(c, p, total):
     page_base(c, "Revizyon", "Müşteri düzeltme istediğinde", "Bildirim işi yapan kişiye gider", p, total)
     flow_y = 357
@@ -393,6 +411,7 @@ def page_roles(c, p, total):
     rows = [
         ("Alan", "Personel", "Yönetici", "Müşteri"),
         ("Atandığı üretim adımı", "Düzenler", "Düzenler", "Görmez"),
+        ("Başkasına atanmış adım", "Yalnız arşivden geri alır", "Düzenler", "Görmez"),
         ("Kullanıcı ve yetki ayarları", "Görmez", "Yönetir", "Görmez"),
         ("Dosya yükleme / sürüm", "Yetkisi varsa", "Yönetir", "İndirir"),
         ("Müşteri onay adımı", "Hazırlar", "Yönetir", "Karar verir"),
@@ -422,7 +441,7 @@ def page_troubleshooting(c, p, total):
     items = [
         ("Dosyayı yanlış yükledim", "Onaya hiç sunulmadıysa Belgeler’deki çöp kutusunu kullan.", "ok"),
         ("Yanlış dosyayı müşteriye gösterdim", "Dosyayı Dokümanlar bölümünden silin ve doğrusunu yükleyin. Müşteri kartta o an duran dosyaları görür.", "warn"),
-        ("Adımı değiştiremiyorum", "Adım size atanmış mı bakın; yalnız atanan kişi veya yönetici değiştirebilir.", "danger"),
+        ("Adımı değiştiremiyorum", "Adım size atanmış mı bakın; yalnız atanan kişi veya yönetici değiştirebilir. Arşivden geri alma bunun dışındadır.", "danger"),
         ("Dosya silinmiyor", "Sayfayı yenileyip tekrar dene; sürerse depolama yetkini kontrol ettir.", "info"),
         ("Müşteri onay alanını görmüyor", "Adımda “Müşteri onaylar” işaretli mi, durumu Bekliyor mu ve kart markası müşteri hesabına tanımlı mı kontrol et.", "info"),
         ("Eski ekran görünüyor", "Alt kısımdaki Panel güncellendi şeridinde Yenile’ye bas veya sayfayı yenile.", "ok"),
@@ -441,20 +460,21 @@ def page_troubleshooting(c, p, total):
 
 
 def build_general(path: Path):
-    total = 9
+    total = 10
     c = canvas.Canvas(str(path), pagesize=(PAGE_W, PAGE_H), pageCompression=1)
     c.setTitle("Lokasyon Operasyon Paneli - Ekip ve Yönetici Kullanım Kılavuzu")
     c.setAuthor("Lokasyon İstanbul")
-    draw_cover(c, "EKİP VE YÖNETİCİ\nKULLANIM KILAVUZU", "Günlük iş takibinden müşteri onayına kadar panelin güncel iş akışı.", "İç kullanım için hazırlanmıştır.", "9bc6f3e66826", BLUE, total)
+    draw_cover(c, "EKİP VE YÖNETİCİ\nKULLANIM KILAVUZU", "Günlük iş takibinden müşteri onayına kadar panelin güncel iş akışı.", "İç kullanım için hazırlanmıştır.", "94ac557e6c64", BLUE, total)
     c.showPage()
     page_daily_routine(c, 2, total); c.showPage()
     page_daily_groups(c, 3, total); c.showPage()
     page_product_cards(c, 4, total); c.showPage()
-    page_revision(c, 5, total); c.showPage()
-    page_annotations(c, 6, total); c.showPage()
-    page_reporting(c, 7, total); c.showPage()
-    page_roles(c, 8, total); c.showPage()
-    page_troubleshooting(c, 9, total); c.showPage()
+    page_archive(c, 5, total); c.showPage()
+    page_revision(c, 6, total); c.showPage()
+    page_annotations(c, 7, total); c.showPage()
+    page_reporting(c, 8, total); c.showPage()
+    page_roles(c, 9, total); c.showPage()
+    page_troubleshooting(c, 10, total); c.showPage()
     c.save()
 
 
@@ -534,7 +554,7 @@ def build_customer(path: Path):
     c = canvas.Canvas(str(path), pagesize=(PAGE_W, PAGE_H), pageCompression=1)
     c.setTitle("Lokasyon Operasyon Paneli - Müşteri Kullanım Kılavuzu")
     c.setAuthor("Lokasyon İstanbul")
-    draw_cover(c, "MÜŞTERİ\nKULLANIM KILAVUZU", "Kartı bulun, size sunulan dosyaları açın ve kararınızı güvenle kaydedin.", "Marka müşterileri için hazırlanmıştır.", "9bc6f3e66826", ORANGE, total, customer=True)
+    draw_cover(c, "MÜŞTERİ\nKULLANIM KILAVUZU", "Kartı bulun, size sunulan dosyaları açın ve kararınızı güvenle kaydedin.", "Marka müşterileri için hazırlanmıştır.", "94ac557e6c64", ORANGE, total, customer=True)
     c.showPage()
     customer_page_nav(c, 2, total); c.showPage()
     customer_page_find(c, 3, total); c.showPage()
