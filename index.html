@@ -4331,14 +4331,35 @@ async function arsivGonder(id){
   if(activeTab==='urun')renderUrunKartlari();
   await sbPatch('urun_adimlar','id',id,{arsivlendi:true});
 }
+/*
+  Arşivden geri alma bilerek sahiplik kilidinin DIŞINDA: başkasına atanmış bir
+  adımı da ekipteki herkes arşivden çıkarabilir. Adımın diğer alanları (durum,
+  atanan, süre…) hâlâ yalnızca sahibine ve yöneticiye açık.
+
+  Doğrudan PATCH kullanılmaz: RLS'teki `adimlar_guncelle` politikası başkasının
+  adımını sessizce atlar, panelde geri alınmış görünür ama veri değişmez.
+  `adim_arsivden_cek` yalnızca `arsivlendi` alanını çevirir ve marka
+  görünürlüğünü korur. Ayrıntı: sql/arsivden-cek.sql
+*/
 async function arsivdenCek(id){
-  {const a=urunAdimlar.find(x=>x.id===id); if(a&&!adimBenimMi(a)){adimKilitUyari(a);return;}}
   const a=urunAdimlar.find(x=>x.id===id);if(!a)return;
+  const sayi=await adimArsivdenCekRPC({p_adim_id:id});
+  if(sayi===null)return;
+  if(!sayi){sbToast('Adım geri alınamadı; listeyi yenileyin.');return}
   a.arsivlendi=false;
   renderArsiv();
   renderGorevler();
   renderDetayAdimlar();
-  await sbPatch('urun_adimlar','id',id,{arsivlendi:false});
+}
+async function adimArsivdenCekRPC(govde){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/rpc/adim_arsivden_cek`,{
+      method:'POST',headers:SBH(),body:JSON.stringify(govde)
+    });
+    const j=await r.json().catch(()=>null);
+    if(!r.ok){sbToast('Arşivden geri alınamadı: '+((j&&(j.message||j.error))||r.status));return null}
+    return Number(j)||0;
+  }catch(e){sbToast('Bağlantı hatası: '+e.message);return null}
 }
 function exportArsivCSV(){
   const list=arsivFiltered();if(!list.length){alert('Dışa aktarılacak arşiv kaydı bulunamadı.');return}
@@ -5678,7 +5699,7 @@ function renderDetayAdimlar(){
           <input type="text" id="adim-not-inp-${a.id}" placeholder="Not ekle..." style="flex:1;border:1px solid #d0d7e3;border-radius:6px;padding:7px 10px;font-size:12px;outline:none">
           <button onclick="adimNotEkle('${a.id}')" style="background:#1565c0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer">Ekle</button>
         </div>
-        <div style="display:flex;gap:8px"><button${kilitAttr} onclick="${a.arsivlendi?'arsivdenCek':'arsivGonder'}('${a.id}')" style="background:none;border:1px solid #ff8f00;color:#ff8f00;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">${a.arsivlendi?'↩ Arşivden Çek':'📦 Arşive Gönder'}</button><button${kilitAttr} onclick="adimSil('${a.id}')" style="background:none;border:1px solid #e53935;color:#e53935;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">🗑 Adımı Sil</button></div>
+        <div style="display:flex;gap:8px"><button${a.arsivlendi?'':kilitAttr} onclick="${a.arsivlendi?'arsivdenCek':'arsivGonder'}('${a.id}')" style="background:none;border:1px solid #ff8f00;color:#ff8f00;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">${a.arsivlendi?'↩ Arşivden Çek':'📦 Arşive Gönder'}</button><button${kilitAttr} onclick="adimSil('${a.id}')" style="background:none;border:1px solid #e53935;color:#e53935;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer">🗑 Adımı Sil</button></div>
       </div>`:''}
     </div>`;
   };
@@ -5771,10 +5792,15 @@ async function kartYenidenAktif(){
   // Kartın arşivlenmiş adımları varsa onlar da geri alınmadan iş listelerde görünmez
   const arsivli=urunAdimlar.filter(a=>a.kart_id===k.id&&a.arsivlendi);
   if(arsivli.length&&confirm(`Bu kartın ${arsivli.length} adımı da arşivde. Onlar da geri alınsın mı?`)){
-    arsivli.forEach(a=>a.arsivlendi=false);
-    await sbPatch('urun_adimlar','kart_id',k.id,{arsivlendi:false});
-    kartDetayAc(aktifKartId);
-    renderGorevler();
+    // Toplu PATCH, RLS yüzünden yalnız kişinin kendi adımlarını geri alırdı;
+    // başkasına atanmış adımlar sessizce arşivde kalıyordu.
+    const sayi=await adimArsivdenCekRPC({p_kart_id:k.id});
+    if(sayi!==null){
+      arsivli.forEach(a=>a.arsivlendi=false);
+      if(sayi<arsivli.length)sbToast(`${arsivli.length} adımın ${sayi} tanesi geri alındı; kalanlar görme yetkiniz dışındaki markalara ait.`);
+      kartDetayAc(aktifKartId);
+      renderGorevler();
+    }
   }
   renderGorevler();
   sbToast('✔ Kart yeniden aktif: '+k.ad);
